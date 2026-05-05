@@ -38,6 +38,7 @@ var mimeToExt = map[string]string{
 	"image/jpeg":      "jpg",
 	"image/png":       "png",
 	"application/zip": "zip",
+	// "application/octect-stream": "bin",
 }
 
 // we should strore the map only of the header nothing else
@@ -87,7 +88,6 @@ func getExtensionFromUrl(rawUrl string) string {
 	}
 
 	ext := path.Ext(u.Path)
-
 	return ext
 }
 
@@ -97,6 +97,7 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 		file_name := strings.Split(r.content_deposition, "filename=")[1]
 		file_type := strings.Split(file_name, ".")[1]
 
+		fmt.Println("THIS IS IT")
 		return file_name, file_type
 
 	}
@@ -104,6 +105,8 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 	if r.content_type != "" {
 		// file_type := strings.Split(r.content_type, "/")[1]
 		file_type := mimeToExt[r.content_type]
+
+		fmt.Println(r.content_type)
 		return "", file_type
 	}
 
@@ -125,8 +128,8 @@ func (d *DownloadInfo) DownloadNormal() {
 		IdleConnTimeout: 30 * time.Second,
 		// DisableCompression: true,
 	}
-	client := &http.Client{Transport: tr}
 
+	client := &http.Client{Transport: tr}
 	resp, err := client.Get(d.Rs.Link)
 
 	if err != nil {
@@ -134,9 +137,9 @@ func (d *DownloadInfo) DownloadNormal() {
 	}
 
 	defer resp.Body.Close()
-
+	fmt.Println(d.Rs.Link)
 	filename, filetype := d.FileInfo.getFileInfo(d.Rs.Link)
-
+	fmt.Println(filename, filetype)
 	var contentType string
 	var preview []byte
 	if filetype == "" {
@@ -146,18 +149,25 @@ func (d *DownloadInfo) DownloadNormal() {
 		_, _ = reader.Read(preview)
 
 		contentType = http.DetectContentType(preview)
-		filetype = mimeToExt[contentType]
+		fmt.Println(contentType)
+		filetype = strings.Split(mimeToExt[contentType], ";")[0]
 	}
 
-	fmt.Println(filetype)
+	// fmt.Println(filetype, filename)
 	// create the buffer , like 8kb or something which get fill uyp and then that call the write thing to the file anda all shit and that
 	var fullpath string
+
+	fmt.Println(d.Rs.Location)
 	if d.Rs.Location != "" {
 
-		if filename != "" {
+		if filename != "" && filetype == "" {
+			fullpath = d.Rs.Location + "/" + filename + ".bin"
+		} else if filename == "" && filetype != "" {
+			fullpath = d.Rs.Location + "/download_file" + "." + filetype
+		} else if filename != "" && filetype != "" {
 			fullpath = d.Rs.Location + "/" + filename + "." + filetype
 		} else {
-			fullpath = d.Rs.Location + "/download_file" + "." + filetype
+			fullpath = d.Rs.Location + "/download_file.bin"
 		}
 	} else {
 		current_dir, err := os.Getwd()
@@ -166,18 +176,24 @@ func (d *DownloadInfo) DownloadNormal() {
 			fmt.Printf("Error Ocurred: %v\n", err)
 			return
 		}
-
-		if filetype == "" {
-			fullpath = current_dir + "/download_file.bin"
-		} else {
+		if filename != "" && filetype == "" {
+			fullpath = current_dir + "/" + filename + ".bin"
+		} else if filename == "" && filetype != "" {
 			fullpath = current_dir + "/download_file" + "." + filetype
+		} else if filename != "" && filetype != "" {
+			fullpath = current_dir + "/" + filename + "." + filetype
+		} else {
+			fullpath = current_dir + "/download_file.bin"
 		}
+
+		fmt.Println("I am in else")
 	}
 
+	// fmt.Println(fullpath)
 	out, err := os.Create(fullpath)
 
 	if err != nil {
-		fmt.Printf("Error occurred: %v", err)
+		fmt.Printf("Error occurred [File creation]: %v", err)
 	}
 
 	buffer_read := make([]byte, buffer_length) //buffer_lenght --> 32kb length
