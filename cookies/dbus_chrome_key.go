@@ -9,16 +9,22 @@ import (
 
 func DbusKeyGetter() []byte {
 
+	// Connecting to session bus , because getting the keyring based thing is mostly session based
+	// this will give us the some random connection name : 34-402
 	conn, err := dbus.SessionBus()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
 
-	service := conn.Object("org.freedesktop.secrets", "org/freedesktop/secrets")
+	// Proxy Object creation (use for the receive and sending the message across the bus )
+	//-----------------Well-Known-Application name  //object-path in that  we want to use
+	service := conn.Object("org.freedesktop.secrets", "/org/freedesktop/secrets")
 
 	var sessionPath dbus.ObjectPath
 	var placeHolder dbus.Variant
+	// Call on the proxy Object is the MEthod call  , and here Secret.Service.OpenSession is the method we are trying to use, Plain (mneans we are not using any encryption for sendinga nd receiving
+	// which return the placeholder and sessionPath for that thing in return
 	err = service.Call("org.freedesktop.Secret.Service.OpenSession", 0, "plain", dbus.MakeVariant("")).Store(&placeHolder, &sessionPath)
 
 	if err != nil {
@@ -26,6 +32,7 @@ func DbusKeyGetter() []byte {
 
 	}
 
+	// The thing we want to search for
 	attrs := map[string]string{
 		"xdg:schema": "chrome_libsecret_os_crypt_password_v2",
 	}

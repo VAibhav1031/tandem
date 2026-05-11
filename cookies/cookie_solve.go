@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func copyfile(dest_name string, src string) (string, error) {
+func copyfile(dest_name string, src string) (*os.File, error) {
 	//******************COPYING_COOKIE_FILE**********
 
 	// path of the Cookie file
@@ -21,20 +21,18 @@ func copyfile(dest_name string, src string) (string, error) {
 	}
 	defer cookie_org.Close()
 
-	temp_cookie_path, err := os.CreateTemp("", dest_name+"-*.sqlite")
+	temp_cookie_path, err := os.CreateTemp("", dest_name+"-*")
 	//need to create the temp fiel and all shit
 	if err != nil {
 		panic(err)
 	}
-	defer os.Remove(temp_cookie_path.Name())
-	defer temp_cookie_path.Close()
 
 	_, err = io.Copy(temp_cookie_path, cookie_org)
 
-	return temp_cookie_path.Name(), err
+	return temp_cookie_path, err
 }
 
-func CookieSolver(host string) string {
+func CookieSolver() string {
 
 	// we need to open the  shit
 
@@ -43,15 +41,17 @@ func CookieSolver(host string) string {
 		log.Fatal(err)
 	}
 
-	cookie_path := home_dir + ".config/chromium/Default/Cookies"
+	cookie_path := home_dir + "/.config/chromium/Default/Cookies"
+	temp_file_path, err := copyfile("Cookies", cookie_path)
 
-	temp_file_path, err := copyfile("Cookie", cookie_path)
+	defer os.Remove(temp_file_path.Name())
+	defer temp_file_path.Close()
 	if err != nil {
 		log.Fatal("Creation of Temp Failed", err)
 		return ""
 	}
 
-	db, err := sql.Open("sqlite", temp_file_path)
+	db, err := sql.Open("sqlite", temp_file_path.Name())
 	if err != nil {
 		fmt.Printf("Error Occurred %v", err)
 		return ""
@@ -78,9 +78,8 @@ func CookieSolver(host string) string {
 	// 	fmt.Printf("- %s\n", tableName)
 	// }
 	//
-
 	// get the latest one
-	rows, err := db.Query("Select value from moz_cookies where name = 'cf_clearance' and host = '.testfile.org' order by creation_utc desc limit 1;")
+	rows, err := db.Query("Select encrypted_value from cookies where name = 'cf_clearance' and host_key = '.testfile.org' order by creation_utc desc limit 1;")
 
 	if err != nil {
 		log.Fatal(err)
