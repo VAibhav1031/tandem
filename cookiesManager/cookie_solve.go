@@ -38,22 +38,22 @@ func CookieSolver() string {
 
 	home_dir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("No HomeDir found!!", err)
 	}
 
 	cookie_path := home_dir + "/.config/chromium/Default/Cookies"
-	temp_file_path, err := copyfile("Cookies", cookie_path)
+	temp_file_path_info, err := copyfile("Cookies", cookie_path)
 
-	defer os.Remove(temp_file_path.Name())
-	defer temp_file_path.Close()
+	defer os.Remove(temp_file_path_info.Name())
+	defer temp_file_path_info.Close()
 	if err != nil {
 		log.Fatal("Creation of Temp Failed", err)
 		return ""
 	}
 
-	db, err := sql.Open("sqlite", temp_file_path.Name())
+	db, err := sql.Open("sqlite", temp_file_path_info.Name())
 	if err != nil {
-		fmt.Printf("Error Occurred %v", err)
+		log.Printf("Error Occurred %v", err)
 		return ""
 	}
 	defer db.Close()
@@ -82,24 +82,26 @@ func CookieSolver() string {
 	rows, err := db.Query("Select encrypted_value from cookies where name = 'cf_clearance' and host_key = '.testfile.org' order by creation_utc desc limit 1;")
 
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Query Failed over the cookie Table", err)
 	}
 	defer rows.Close()
 
-	var encrypted_value string
+	var encrypted_value []byte
 	for rows.Next() {
 		if err := rows.Scan(&encrypted_value); err != nil {
-			log.Fatal(err)
+			log.Fatal("Unable to Scan the encrypted Value", err)
 		}
 		//fmt.Printf("- %s\n", row_)
 	}
+	log.Printf("raw bytes length: %d", len(encrypted_value))
+	log.Printf("first 6 bytes: %x", encrypted_value[:6])
+	log.Printf("prefix string: %s", string(encrypted_value[:3]))
 
 	key := DbusKeyGetter()
-	cookie, err := decryptCookie([]byte(encrypted_value), key)
+	cookie, err := decryptCookie(encrypted_value, key)
 	if err != nil {
-		log.Fatal("There is no Cookie, Currently")
+		log.Println("Error In Decryption: ", err)
 		return ""
 	}
 	return cookie
-
 }

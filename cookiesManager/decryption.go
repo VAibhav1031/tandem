@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
+	"fmt"
 	"log"
 )
 
@@ -20,13 +21,13 @@ func decryptCookie(encrypted []byte, key []byte) (string, error) {
 
 	// strip the v10/v11 prefix
 	encrypted = encrypted[3:]
-
 	// IV is always 16 space characters on Linux
 	iv := []byte("                ") // 16 spaces, 0x20
 
 	// create AES block cipher with our derived key
 	block, err := aes.NewCipher(key)
 	if err != nil {
+		log.Println("[Decryption] : Failed in creation of the AES block")
 		return "", err
 	}
 
@@ -35,7 +36,7 @@ func decryptCookie(encrypted []byte, key []byte) (string, error) {
 
 	// CBC requires data length to be multiple of block size (16)
 	if len(encrypted)%aes.BlockSize != 0 {
-		log.Fatal("encrypted data is not block aligned")
+		log.Println("[Decryption] : encrypted data is not block aligned")
 		return "", errors.New("encrypted data is not block aligned")
 	}
 
@@ -46,10 +47,14 @@ func decryptCookie(encrypted []byte, key []byte) (string, error) {
 	// strip PKCS7 padding
 	// last byte tells you how many padding bytes were added
 	padLen := int(plaintext[len(plaintext)-1])
+	fmt.Println(padLen)
 	if padLen > aes.BlockSize || padLen == 0 {
-		return "", errors.New("invalid padding")
+		return "", errors.New("Invalid Padding, Wrong KEY!!")
 	}
 	plaintext = plaintext[:len(plaintext)-padLen]
 
+	if len(plaintext) > 32 {
+		plaintext = plaintext[32:]
+	}
 	return string(plaintext), nil
 }
