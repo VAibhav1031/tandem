@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
-	"fmt"
+	// "fmt"
 	"log"
 )
 
@@ -47,7 +47,7 @@ func decryptCookie(encrypted []byte, key []byte) (string, error) {
 	// strip PKCS7 padding
 	// last byte tells you how many padding bytes were added
 	padLen := int(plaintext[len(plaintext)-1])
-	fmt.Println(padLen)
+	// fmt.Println(padLen)
 	if padLen > aes.BlockSize || padLen == 0 {
 		return "", errors.New("Invalid Padding, Wrong KEY!!")
 	}

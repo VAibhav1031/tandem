@@ -113,7 +113,8 @@ func kwalletKey(conn *dbus.Conn) []byte {
 			log.Printf("open failed for %s: %v", service, err)
 			continue
 		}
-		log.Printf("opened wallet, handle: %d", handle)
+		// DEBUGGING log
+		// log.Printf("opened wallet, handle: %d", handle)
 		defer kwallet.Call("org.kde.KWallet.Close", 0, handle, false, "go-app")
 
 		var secret []byte
@@ -123,7 +124,9 @@ func kwalletKey(conn *dbus.Conn) []byte {
 			log.Printf("readEntry failed: %v", err)
 			continue
 		}
-		log.Printf("secret length: %d raw: %x", len(secret), secret)
+
+		// DEBUGGING
+		// log.Printf("secret length: %d raw: %x", len(secret), secret)
 		secret = bytes.TrimRight(secret, "\n")
 		return pbkdf2.Key(secret, []byte("saltysalt"), 1, 16, sha1.New)
 	}

@@ -93,10 +93,10 @@ func CookieSolver() string {
 		}
 		//fmt.Printf("- %s\n", row_)
 	}
-	log.Printf("raw bytes length: %d", len(encrypted_value))
-	log.Printf("first 6 bytes: %x", encrypted_value[:6])
-	log.Printf("prefix string: %s", string(encrypted_value[:3]))
-
+	// log.Printf("raw bytes length: %d", len(encrypted_value))
+	// log.Printf("first 6 bytes: %x", encrypted_value[:6])
+	// log.Printf("prefix string: %s", string(encrypted_value[:3]))
+	//
 	key := DbusKeyGetter()
 	cookie, err := decryptCookie(encrypted_value, key)
 	if err != nil {
