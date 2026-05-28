@@ -16,8 +16,8 @@ import (
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/publicsuffix"
 
-	// "golang.org/x/net/http2"
 	"github.com/VAibhav1031/tandem/cookiesManager"
+	"golang.org/x/net/http2"
 )
 
 // Payload we send to FlareSolverr
@@ -40,6 +40,11 @@ type FlareSolverrResponse struct {
 }
 
 var GlobalCookieCache = cookies.CookieSolver()
+
+type DualTransport struct {
+	H1 *http.Transport
+	H2 *http2.Transport
+}
 
 type uTLSTransport struct {
 	Next http.RoundTripper
@@ -138,6 +143,76 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 
 	log.Println("[Tier 1]-[spook_TLS] dialTLS worked as intended to... ")
 	return uConn, nil
+}
+
+func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// FUTURe: ADD context
+
+	addr := req.URL.Host
+	if !itcontainsPort(addr) {
+		// if req.URL.Scheme == "https" {
+		// 	addr = addr + ":443"
+		// } else {
+		// 	addr = addr + ":80"
+		// }
+
+		addr = addr + ":443"
+	}
+
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	tcpConn, err := dialer.Dial("tcp", addr)
+
+	if err != nil {
+		return nil, fmt.Errorf("tcp dial: %w", err)
+	}
+
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		tcpConn.Close()
+		return nil, fmt.Errorf("split host/port: %w", err)
+	}
+	log.Printf("[Tier1]-[spook_TLS]: HOST %v", host)
+
+	uConn := utls.UClient(tcpConn, &utls.Config{
+		ServerName: host,
+		// NextProtos is set automatically by HelloChrome_Auto to include
+		// "h2" and "http/1.1", so ALPN negotiation works correctly.
+		NextProtos: []string{"h2", "http/1.1"}, // ALPN
+	}, utls.HelloChrome_Auto)
+
+	if err := uConn.Handshake(); err != nil {
+		uConn.Close()
+		return nil, fmt.Errorf("utls handshake: %w", err)
+	}
+
+	if uConn.ConnectionState().NegotiatedProtocol == "h2" {
+		// uConn.Close()
+		h2ClientConn, err := d.H2.NewClientConn(uConn)
+		if err != nil {
+			uConn.Close()
+			return nil, fmt.Errorf("server did not negotiate h2 (got %q)", uConn.ConnectionState().NegotiatedProtocol)
+		}
+		return h2ClientConn.RoundTrip(req)
+
+	}
+
+	return d.roundTripH1(req, uConn)
+}
+
+func (d *DualTransport) roundTripH1(req *http.Request, conn net.Conn) (*http.Response, error) {
+	h1Mock := &http.Transport{
+		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return conn, nil
+		},
+		MaxIdleConns: 10,
+	}
+
+	return h1Mock.RoundTrip(req)
+}
+
+func itcontainsPort(host string) bool {
+	_, _, err := net.SplitHostPort(host)
+	return err == nil
 }
 
 type SolverTransport struct {
