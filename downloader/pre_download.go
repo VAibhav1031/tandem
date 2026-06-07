@@ -41,11 +41,6 @@ type FlareSolverrResponse struct {
 
 var GlobalCookieCache = cookies.CookieSolver()
 
-type DualTransport struct {
-	H1 *http.Transport
-	H2 *http2.Transport
-}
-
 type uTLSTransport struct {
 	Next http.RoundTripper
 }
@@ -145,6 +140,39 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 	return uConn, nil
 }
 
+type DualTransport struct {
+	H1 *http.Transport
+	H2 *http2.Transport
+}
+
+type contextKey string
+
+const negotiatedConnKey contextKey = "negotiatedConn"
+
+func NewDualTransport(dt *DualTransport) *DualTransport {
+
+	// dt = &DualTransport{H1: &http.Transport{}, H2: &http2.Transport{}}
+
+	dt.H2.DialTLSContext = func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
+
+		if conn, ok := ctx.Value(negotiatedConnKey).(net.Conn); ok {
+			return conn, nil
+		}
+		return dialUTLSDual(ctx, network, addr, []string{"h2"})
+	}
+
+	dt.H1.DialContext = func(ctx context.Context, network string, addr string) (net.Conn, error) {
+
+		if conn, ok := ctx.Value(negotiatedConnKey).(net.Conn); ok {
+			return conn, nil
+		}
+		return dialUTLSDual(ctx, network, addr, []string{"http/1.1"})
+	}
+
+	return dt
+
+}
+
 func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// FUTURe: ADD context
 
@@ -185,34 +213,59 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("utls handshake: %w", err)
 	}
 
+	ctxWithConn := context.WithValue(req.Context(), negotiatedConnKey, uConn.Conn)
+	reqWithConn := req.WithContext(ctxWithConn)
+
 	if uConn.ConnectionState().NegotiatedProtocol == "h2" {
-		// uConn.Close()
-		h2ClientConn, err := d.H2.NewClientConn(uConn)
-		if err != nil {
-			uConn.Close()
-			return nil, fmt.Errorf("server did not negotiate h2 (got %q)", uConn.ConnectionState().NegotiatedProtocol)
-		}
-		return h2ClientConn.RoundTrip(req)
+		// // uConn.Close()
+		// h2ClientConn, err := d.H2.NewClientConn(uConn) // currently  every RoundTrip is causing huge problem of having newClientConn call which is  re estabilishing those structs and usage of the   methods around it , which is wastage of memory adn  will slow the  program
+		// if err != nil {
+		// 	uConn.Close()
+		// 	return nil, fmt.Errorf("server did not negotiate h2 (got %q)", uConn.ConnectionState().NegotiatedProtocol)
+		// }
+		// return h2ClientConn.RoundTrip(req)
 
+		return d.H2.RoundTrip(reqWithConn)
 	}
 
-	return d.roundTripH1(req, uConn)
+	return d.H1.RoundTrip(reqWithConn)
 }
 
-func (d *DualTransport) roundTripH1(req *http.Request, conn net.Conn) (*http.Response, error) {
-	h1Mock := &http.Transport{
-		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return conn, nil
-		},
-		MaxIdleConns: 10,
-	}
-
-	return h1Mock.RoundTrip(req)
-}
+// func (d *DualTransport) roundTripH1(req *http.Request, conn net.Conn) (*http.Response, error) {
+// 	h1Mock := &http.Transport{
+// 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+// 			return conn, nil
+// 		},
+// 		MaxIdleConns: 10,
+// 	}
+//
+// 	return h1Mock.RoundTrip(req)
+// }
 
 func itcontainsPort(host string) bool {
 	_, _, err := net.SplitHostPort(host)
 	return err == nil
+}
+
+func dialUTLSDual(ctx context.Context, network string, addr string, protos []string) (net.Conn, error) {
+
+	tcpConn, err := net.Dial(network, addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	host, _, _ := net.SplitHostPort(addr)
+	config := &utls.Config{
+		ServerName: host,
+		NextProtos: protos,
+	}
+	uConn := utls.UClient(tcpConn, config, utls.HelloChrome_Auto)
+	if err := uConn.Handshake(); err != nil {
+		uConn.Close()
+		return nil, err
+	}
+	return uConn, nil
 }
 
 type SolverTransport struct {

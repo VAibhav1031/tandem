@@ -3,19 +3,22 @@ package downloader
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 const buffer_length int = 32 * 1024
 
 type DownloadInfo struct {
-	Rs       *RequestServer
-	FileInfo *Responseheaders
+	Rs *RequestServer
+	// FileInfo *Responseheaders // i really dont feel now there is a use case for this cause there is no pre req thing happen
 }
 type RequestServer struct {
 	Link     string
@@ -32,13 +35,14 @@ type Responseheaders struct {
 }
 
 var mimeToExt = map[string]string{
-	"text/plain":      "txt",
-	"text/csv":        "csv",
-	"application/pdf": "pdf",
-	"image/jpeg":      "jpg",
-	"image/png":       "png",
-	"application/zip": "zip",
-	// "application/octect-stream": "bin",
+	"text/plain":                "txt",
+	"text/html":                 "html",
+	"text/csv":                  "csv",
+	"application/pdf":           "pdf",
+	"image/jpeg":                "jpg",
+	"image/png":                 "png",
+	"application/zip":           "zip",
+	"application/octect-stream": "bin",
 }
 
 // we should strore the map only of the header nothing else
@@ -52,31 +56,14 @@ func NewServerLink(link string, n int8, location string) *RequestServer {
 
 // i want to create the request (GET) to the server link and  all shit ,  and based on the response i will do  a shit and all shit
 
-func (l *RequestServer) ServerResponse() *Responseheaders {
-	resp, err := http.Head(l.Link)
+func ServerResponse(headers http.Header) *Responseheaders {
 
-	if err != nil {
-		fmt.Printf("Errot Occurred %v \n", err)
-	}
-
-	defer resp.Body.Close()
-	return &Responseheaders{content_length: resp.Header.Get("Content-Length"), content_type: resp.Header.Get("Content-Type"), accept_ranges: resp.Header.Get("Accept-Ranges")}
+	return &Responseheaders{content_length: headers.Get("Content-Length"), content_type: headers.Get("Content-Type"), accept_ranges: headers.Get("Accept-Ranges")}
 
 }
 
-func DownloadWorker(response *Responseheaders, request *RequestServer) *DownloadInfo {
-	return &DownloadInfo{Rs: request, FileInfo: response}
-}
-func (r *Responseheaders) ConcurrentCheck() bool {
-
-	accept_range := r.accept_ranges
-
-	if accept_range == "" {
-		return false
-	} else {
-		return true
-	}
-
+func DownloadWorker(request *RequestServer) *DownloadInfo {
+	return &DownloadInfo{Rs: request}
 }
 
 func getExtensionFromUrl(rawUrl string) string {
@@ -122,23 +109,47 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 
 func (d *DownloadInfo) DownloadNormal() {
 
-	// i really think
-	tr := &http.Transport{
-		// MaxIdleConns:       5,
-		IdleConnTimeout: 30 * time.Second,
-		// DisableCompression: true,
+	// h2t := &http2.Transport{
+	// 	DialTLSContext: dialUTLS,
+	// 	// AllowHTTP: false, // keep false for real use
+	// }
+
+	h := &DualTransport{
+		H1: &http.Transport{},
+		H2: &http2.Transport{},
 	}
 
-	client := &http.Client{Transport: tr}
-	resp, err := client.Get(d.Rs.Link)
+	ht := NewDualTransport(h)
 
+	// DefaultTransport is also RoundTripper casuse it has the RoundTrip method with it
+	// so now in this condition it was like we have to  have to remove that for teh internet request andd add the new one her eit is the h2t
+	// which is also a Transport but not the DefaultTransport one , but it satisfy condition ,plus with our custom TLS thing ,  and the uTLSuTLSTransport struct will create the request to the h2t with those uTuTLSTransport RoundTrip request added Headers
+	var chain http.RoundTripper = ht
+
+	chain = &uTLSTransport{Next: h}
+	chain = &LocalCookieTransport{Next: chain}
+	chain = &SolverTransport{Next: chain}
+
+	client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
+
+	req, err := http.NewRequest("GET", d.Rs.Link, nil)
 	if err != nil {
-		fmt.Printf("Error Ocurred: %v\n", err)
+		log.Printf("[Downloader] Error Ocurred <http Client GET req> : %v\n", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("[Downloader] Network error", err)
 	}
 
 	defer resp.Body.Close()
-	fmt.Println(d.Rs.Link)
-	filename, filetype := d.FileInfo.getFileInfo(d.Rs.Link)
+
+	if resp.StatusCode != 200 {
+		log.Println("[Downloader] Failure :", resp.StatusCode)
+		return
+	}
+
+	req_head := ServerResponse(resp.Header)
+	filename, filetype := req_head.getFileInfo(d.Rs.Link)
 	fmt.Println(filename, filetype)
 	var contentType string
 	var preview []byte
@@ -149,57 +160,49 @@ func (d *DownloadInfo) DownloadNormal() {
 		_, _ = reader.Read(preview)
 
 		contentType = http.DetectContentType(preview)
+		contentType = strings.Split(contentType, ";")[0]
 		fmt.Println(contentType)
-		filetype = strings.Split(mimeToExt[contentType], ";")[0]
+		filetype = mimeToExt[contentType]
+
+		// fmt.Println(filetype)
+	}
+	// fmt.Println(filetype, filename)
+	// create the buffer , like 8kb or something which get fill--up and then  call the write thing to the file anda all shit and that
+	var fullpath string
+	var filename_with_type string
+	fmt.Println(d.Rs.Location)
+
+	// FileInfo: filenname with type
+	if filename != "" && filetype == "" {
+		filename_with_type = "/" + filename + ".bin"
+	} else if filename == "" && filetype != "" {
+		filename_with_type = "/download_file" + "." + filetype
+	} else if filename != "" && filetype != "" {
+		filename_with_type = "/" + filename + "." + filetype
+	} else {
+		filename_with_type = "/download_file.bin"
 	}
 
-	// fmt.Println(filetype, filename)
-	// create the buffer , like 8kb or something which get fill uyp and then that call the write thing to the file anda all shit and that
-	var fullpath string
-
-	fmt.Println(d.Rs.Location)
+	// LocationInfo: file location addition , for the fullpath creation
 	if d.Rs.Location != "" {
-
-		if filename != "" && filetype == "" {
-			fullpath = d.Rs.Location + "/" + filename + ".bin"
-		} else if filename == "" && filetype != "" {
-			fullpath = d.Rs.Location + "/download_file" + "." + filetype
-		} else if filename != "" && filetype != "" {
-			fullpath = d.Rs.Location + "/" + filename + "." + filetype
-		} else {
-			fullpath = d.Rs.Location + "/download_file.bin"
-		}
+		fullpath = d.Rs.Location + filename_with_type
 	} else {
 		current_dir, err := os.Getwd()
-
 		if err != nil {
-			fmt.Printf("Error Ocurred: %v\n", err)
+			fmt.Printf("[Downloader]: Error Ocurred <Current Directory>: %v\n", err)
 			return
 		}
-		if filename != "" && filetype == "" {
-			fullpath = current_dir + "/" + filename + ".bin"
-		} else if filename == "" && filetype != "" {
-			fullpath = current_dir + "/download_file" + "." + filetype
-		} else if filename != "" && filetype != "" {
-			fullpath = current_dir + "/" + filename + "." + filetype
-		} else {
-			fullpath = current_dir + "/download_file.bin"
-		}
-
-		fmt.Println("I am in else")
+		fullpath = current_dir + filename_with_type
+		// fmt.Println("I am in else")
 	}
 
-	// fmt.Println(fullpath)
 	out, err := os.Create(fullpath)
-
 	if err != nil {
-		fmt.Printf("Error occurred [File creation]: %v", err)
+		fmt.Printf("[Downloader]: Error occurred <File creation>: %v", err)
 	}
 
 	buffer_read := make([]byte, buffer_length) //buffer_lenght --> 32kb length
-
-	contentLength := resp.ContentLength // This is an int64
-
+	contentLength := resp.ContentLength        // This is an int64
 	var downloaded int64 = 0
 
 	if preview != nil {
@@ -207,22 +210,20 @@ func (d *DownloadInfo) DownloadNormal() {
 		out.Write(preview)
 	}
 	for {
-		// Read from network into buffer
+		// read from network into buffer_read (network Stream buffer
 		n, err := resp.Body.Read(buffer_read)
 
 		if n > 0 {
-			// Write this chunk to disk
+			// Writing the chunk to the disk (chunk by chunk)
 			out.Write(buffer_read[:n])
 
 			// Update the counter
 			downloaded += int64(n)
 
-			// Comparison works here!
 			if contentLength > 0 {
 				percent := (float64(downloaded) / float64(contentLength)) * 100
 				fmt.Printf("\rProgress: %.2f%% \n", percent)
 			}
-
 		}
 
 		if err == io.EOF {
@@ -231,4 +232,6 @@ func (d *DownloadInfo) DownloadNormal() {
 	}
 }
 
-func ConcurrentDownloader() {}
+func (d *DownloadInfo) ConcurrentDownloader() {
+
+}
