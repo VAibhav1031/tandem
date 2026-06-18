@@ -55,7 +55,7 @@ func (t *uTLSTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br ,zstd")
 
-	if req.Header["Cookie"][0] != "" {
+	if req.Header.Get("Cookie") != "" {
 		log.Println("[Tier 1] Cookie is set ..")
 
 	}
