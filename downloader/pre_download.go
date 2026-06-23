@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 
 	"crypto/tls"
 	"net"
@@ -143,32 +144,70 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 type DualTransport struct {
 	H1 *http.Transport
 	H2 *http2.Transport
+
+	mu         sync.RWMutex
+	alpnCache  map[string]string
+	firstConns map[string]net.Conn
 }
 
 type contextKey string
 
 const negotiatedConnKey contextKey = "negotiatedConn"
 
-func NewDualTransport(dt *DualTransport) *DualTransport {
+func NewDualTransport() *DualTransport {
 
-	// dt = &DualTransport{H1: &http.Transport{}, H2: &http2.Transport{}}
+	dt := &DualTransport{
+		H1:         &http.Transport{MaxIdleConns: 100, IdleConnTimeout: 90 * time.Second, ResponseHeaderTimeout: 10 * time.Second},
+		H2:         &http2.Transport{},
+		alpnCache:  make(map[string]string),
+		firstConns: make(map[string]net.Conn),
+	}
 
+	sharedFunc := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dt.mu.Lock()
+
+		if conn, exists := dt.firstConns[addr]; exists {
+			delete(dt.firstConns, addr)
+			dt.mu.Unlock()
+			return conn, nil
+
+		}
+		dt.mu.Unlock()
+
+		dialer := &net.Dialer{Timeout: 10 * time.Second}
+		tcpConn, err := dialer.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			tcpConn.Close()
+			return nil, fmt.Errorf("split host/port: %w", err)
+		}
+
+		uConn := utls.UClient(tcpConn, &utls.Config{
+			ServerName: host,
+			// NextProtos is set automatically by HelloChrome_Auto to include
+			// "h2" and "http/1.1", so ALPN negotiation works correctly.
+			NextProtos: []string{"h2", "http/1.1"}, // ALPN
+		}, utls.HelloChrome_Auto)
+
+		if err := uConn.HandshakeContext(ctx); err != nil {
+			uConn.Close()
+			return nil, err
+		}
+
+		return uConn, nil
+
+	}
+
+	dt.H1.DialTLSContext = sharedFunc
+	// we are already done the TLS thingh so  we dont go for the DialTLSContext, we skip Assertion check and will move nicely also
 	dt.H2.DialTLSContext = func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
 
-		if conn, ok := ctx.Value(negotiatedConnKey).(net.Conn); ok {
-			return conn, nil
-		}
-		return dialUTLSDual(ctx, network, addr, []string{"h2"})
+		return sharedFunc(ctx, network, addr)
 	}
-
-	dt.H1.DialContext = func(ctx context.Context, network string, addr string) (net.Conn, error) {
-
-		if conn, ok := ctx.Value(negotiatedConnKey).(net.Conn); ok {
-			return conn, nil
-		}
-		return dialUTLSDual(ctx, network, addr, []string{"http/1.1"})
-	}
-
 	return dt
 
 }
@@ -176,15 +215,37 @@ func NewDualTransport(dt *DualTransport) *DualTransport {
 func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// FUTURe: ADD context
 
+	// we can save the new request TLS by the
 	addr := req.URL.Host
 	if !itcontainsPort(addr) {
-		// if req.URL.Scheme == "https" {
-		// 	addr = addr + ":443"
-		// } else {
-		// 	addr = addr + ":80"
-		// }
-
 		addr = addr + ":443"
+	}
+
+	// Fast Path : if we already havethe proto available
+	d.mu.RLock()
+	proto, known := d.alpnCache[addr]
+	d.mu.RUnlock()
+
+	if known {
+
+		if proto == "h2" {
+			return d.H2.RoundTrip(req)
+		}
+		return d.H1.RoundTrip(req)
+	}
+
+	d.mu.Lock()
+	// Dont get Confused this is for the first time when there is no protocol available then we mostly do  is lock (write) the thing and move to dialer cause the proto check would not be there , but for other goroutines in the queue will gonna get help cause when they acquire this lock they already get the the proto
+
+	// FOR : When you  run n Concurrent Goroutines of the Request then.
+
+	if proto, known = d.alpnCache[addr]; known {
+
+		d.mu.Unlock()
+		if proto == "h2" {
+			return d.H2.RoundTrip(req)
+		}
+		return d.H1.RoundTrip(req)
 	}
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
@@ -203,8 +264,6 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName: host,
-		// NextProtos is set automatically by HelloChrome_Auto to include
-		// "h2" and "http/1.1", so ALPN negotiation works correctly.
 		NextProtos: []string{"h2", "http/1.1"}, // ALPN
 	}, utls.HelloChrome_Auto)
 
@@ -213,59 +272,25 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("utls handshake: %w", err)
 	}
 
-	ctxWithConn := context.WithValue(req.Context(), negotiatedConnKey, uConn.Conn)
-	reqWithConn := req.WithContext(ctxWithConn)
-
-	if uConn.ConnectionState().NegotiatedProtocol == "h2" {
-		// // uConn.Close()
-		// h2ClientConn, err := d.H2.NewClientConn(uConn) // currently  every RoundTrip is causing huge problem of having newClientConn call which is  re estabilishing those structs and usage of the   methods around it , which is wastage of memory adn  will slow the  program
-		// if err != nil {
-		// 	uConn.Close()
-		// 	return nil, fmt.Errorf("server did not negotiate h2 (got %q)", uConn.ConnectionState().NegotiatedProtocol)
-		// }
-		// return h2ClientConn.RoundTrip(req)
-
-		return d.H2.RoundTrip(reqWithConn)
+	negotiatedProto := uConn.ConnectionState().NegotiatedProtocol
+	if negotiatedProto == "" || negotiatedProto == "http/1.1" {
+		negotiatedProto = "h1"
 	}
 
-	return d.H1.RoundTrip(reqWithConn)
-}
+	d.alpnCache[addr] = negotiatedProto
+	d.firstConns[addr] = uConn
+	d.mu.Unlock()
 
-// func (d *DualTransport) roundTripH1(req *http.Request, conn net.Conn) (*http.Response, error) {
-// 	h1Mock := &http.Transport{
-// 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-// 			return conn, nil
-// 		},
-// 		MaxIdleConns: 10,
-// 	}
-//
-// 	return h1Mock.RoundTrip(req)
-// }
+	if negotiatedProto == "h2" {
+		return d.H2.RoundTrip(req)
+	}
+
+	return d.H1.RoundTrip(req)
+}
 
 func itcontainsPort(host string) bool {
 	_, _, err := net.SplitHostPort(host)
 	return err == nil
-}
-
-func dialUTLSDual(ctx context.Context, network string, addr string, protos []string) (net.Conn, error) {
-
-	tcpConn, err := net.Dial(network, addr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	host, _, _ := net.SplitHostPort(addr)
-	config := &utls.Config{
-		ServerName: host,
-		NextProtos: protos,
-	}
-	uConn := utls.UClient(tcpConn, config, utls.HelloChrome_Auto)
-	if err := uConn.Handshake(); err != nil {
-		uConn.Close()
-		return nil, err
-	}
-	return uConn, nil
 }
 
 type SolverTransport struct {

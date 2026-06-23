@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	// "context"
 	"fmt"
 	"io"
 	"log"
@@ -13,8 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/net/http2"
+	// "golang.org/x/net/http2"
 )
 
 const buffer_length int = 32 * 1024
@@ -113,17 +113,7 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 
 func (d *DownloadInfo) DownloadNormal() {
 
-	// h2t := &http2.Transport{
-	// 	DialTLSContext: dialUTLS,
-	// 	// AllowHTTP: false, // keep false for real use
-	// }
-
-	h := &DualTransport{
-		H1: &http.Transport{},
-		H2: &http2.Transport{},
-	}
-
-	ht := NewDualTransport(h)
+	ht := NewDualTransport()
 
 	// DefaultTransport is also RoundTripper casuse it has the RoundTrip method with it
 	// so now in this condition it was like we have to  have to remove that for teh internet request andd add the new one her eit is the h2t
@@ -239,6 +229,7 @@ func (d *DownloadInfo) DownloadNormal() {
 type conCurrentDet struct {
 	n      int
 	buffer []byte
+	passed bool
 	mw     sync.Mutex
 }
 
@@ -253,112 +244,132 @@ const globalLimit int = 3
 
 func (d *DownloadInfo) ConcurrentDownloader() {
 
-	// the reques initiator..
-
-	// chain RoundTripper := http.Defaul.. will have the chains we can use for the work andallshit
-
-	h := &DualTransport{
-		H1: &http.Transport{},
-		H2: &http2.Transport{},
-	}
-	ht := NewDualTransport(h)
+	ht := NewDualTransport()
 	var chain http.RoundTripper = ht
 	chain = &uTLSTransport{Next: ht}
-	client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
-	req, err := http.NewRequest("GET", d.Rs.Link, nil)
+	client := &http.Client{Transport: chain, Timeout: 10 * time.Minute}
+	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
 
 	resp, err := client.Do(req)
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		fmt.Printf("[Concurrent-Error]: %v", err)
+
+	if err != nil {
+		log.Printf("[Concurrent-Error]: %v code ->%v", err)
 		return
 	}
+
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Printf("[Concurrent-Error]: %v", err)
+		return
+	}
+	d.cn.n = 4
 	headers := ServerResponse(resp.Header)
 	total_size, _ := strconv.Atoi(headers.content_length)
-	fmt.Println("total_size of the file", total_size, "and in the gb", (total_size / (1024 * 1024 * 1024)))
-	batch_size := int(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problems
+	log.Println("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
+
+	//**************current_Problem
+	batch_size := int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problems
+	log.Printf("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
 	d.cn.buffer = make([]byte, total_size)
-	// var start int
-	// var limit int
+	d.cn.passed = true
 
-	d.cn.n = 4
-	start, limit := 0, batch_size
+	start, limit := int64(0), batch_size
 
-	for i := 0; i <= d.cn.n; i++ {
+	wg := &sync.WaitGroup{}
+	for i := 0; i < d.cn.n; i++ {
 		// current outer variables limit, start, is the passed one , the outer is the globalLimit one
 
-		go func(start int, limit int) {
+		log.Printf("GOROUTinE %d-->Start: %d, limit: %d", i, start, limit)
 
-			client := &http.Client{Timeout: 30 * time.Second}
-			req, err := http.NewRequest("GET", d.Rs.Link, nil)
+		// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		wg.Add(1)
+		go func(start int64, limit int64) {
+			defer wg.Done()
+
+			// there is a new client is being created here , and all shit
+			// client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
+			req, err := http.NewRequest("GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
 			if err != nil {
-				fmt.Println("[Concurrent-ERROR]: ", err)
+				log.Println("[Concurrent-ERROR]: ", err)
 			}
-			req.Header.Set("Range", fmt.Sprintf("%s-%s", start, limit-1))
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, limit-1))
 			// request based on the range and allshit
 			current := 0
 			for {
 
 				if current == globalLimit {
-					fmt.Println("All Limit Crossed!! Exitting Goroutine..")
+					d.cn.mw.Lock()
+					d.cn.passed = false
+					d.cn.mw.Unlock()
+					log.Println("All Limit Crossed!! Exitting Goroutine..")
 					return
 				}
 
 				resp, err := client.Do(req)
 				if err != nil {
-					fmt.Printf("[Concurrent-Error]: %v, ", err)
+					log.Printf("[Concurrent-Error]: Connection Failed %v, ", err)
 					// exit the goroutine thing...:_)
 					current++
+					resp.Body.Close()
+					time.Sleep(1 * time.Second)
 					continue
 				}
 
-				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+					log.Printf("[Concurrent-Error]: Unexpected status code : %d", resp.StatusCode)
+					resp.Body.Close()
+					current++
+					continue
+				}
 
-				d.cn.mw.Lock()
 				// read to the correct section of the buffer
-				// n, err := resp.Body.Read(d.cn.buffer)
-				if err != nil {
-					current++
-					fmt.Printf("[Concurrent-Error]: %v,", err)
-					continue
-				}
-				fmt.Println("gibvbbbbberish")
-				n, err := io.ReadFull(resp.Body, d.cn.buffer[start:limit])
-				if n < 0 {
-					fmt.Println("BOOOM, nothing readup ")
-					return
-				}
-				if err != nil {
-					fmt.Printf("[Concurrent-Error]: %v", err)
+				destBuffer := d.cn.buffer[start:limit]
+				// Since each slice of the buffere is not overlapping , so  there is no need to put the lock over the buffer and we cango easily and it is the design which help it move
+				n, err := io.ReadFull(resp.Body, destBuffer)
+				resp.Body.Close()
+				if n < 0 || err != nil {
+					log.Printf("[Concurrent-Error]: BOOOM!!, start %d: limit %d | Read-up ERR-> %v", start, limit, err)
 					current++
 					continue
 				}
 
-				defer d.cn.mw.Unlock()
+				break
 			}
 
 		}(start, limit)
 		start = limit
-		limit = start + limit
+		limit = start + batch_size
+
+		if limit%int64(total_size) != limit {
+			limit = limit - (limit % int64(total_size))
+		}
+		// we need to wait till all the goroutines are complete  then proceed with lower ,  if done then based on the passed bool value we proceed like if it went well or not if not then we will just skip that and all shit
 	}
 
+	// i got one solution
+	wg.Wait()
+
+	if !d.cn.passed {
+		log.Printf("[Concurrent-Error]: Concurrent Process Failed !!")
+		return
+	}
 	filename, filetype := headers.getFileInfo(d.Rs.Link)
-	fmt.Println(filename, filetype)
-	// var contentType string
-	// var preview []byte
-	// if filetype == "" {
-	// 	reader := resp.Body
-	// 	preview = make([]byte, 512)
-	//
-	// 	_, _ = reader.Read(preview)
-	//
-	// 	contentType = http.DetectContentType(preview)
-	// 	contentType = strings.Split(contentType, ";")[0]
-	// 	fmt.Println(contentType)
-	// 	filetype = mimeToExt[contentType]
-	//
-	// 	// fmt.Println(filetype)
-	// }
+	// fmt.Println(filename, filetype)
+	var contentType string
+	var preview []byte
+	if filetype == "" {
+		// reader := resp.Body
+		preview = d.cn.buffer[:513]
+
+		// _, _ = reader.Read(preview)
+
+		contentType = http.DetectContentType(preview)
+		contentType = strings.Split(contentType, ";")[0]
+		fmt.Println("Content-Type", contentType)
+		filetype = mimeToExt[contentType]
+
+		// fmt.Println(filetype)
+	}
 	// fmt.Println(filetype, filename)
 	var fullpath string
 	var filename_with_type string
@@ -381,7 +392,7 @@ func (d *DownloadInfo) ConcurrentDownloader() {
 	} else {
 		current_dir, err := os.Getwd()
 		if err != nil {
-			fmt.Printf("[Downloader]: Error Ocurred <Current Directory>: %v\n", err)
+			fmt.Printf("[Concurrent-Downloader]: Error Ocurred <Current Directory>: %v\n", err)
 			return
 		}
 		fullpath = current_dir + filename_with_type
@@ -390,7 +401,7 @@ func (d *DownloadInfo) ConcurrentDownloader() {
 
 	out, err := os.Create(fullpath)
 	if err != nil {
-		fmt.Printf("[Downloader]: Error occurred <File creation>: %v", err)
+		log.Printf("[Concurrent-Downloader]: Error occurred <File creation>: %v", err)
 	}
 
 	out.Write(d.cn.buffer)
