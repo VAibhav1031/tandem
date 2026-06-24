@@ -3,7 +3,6 @@ package downloader
 import (
 
 	// "fmt"
-	"golang.org/x/net/http2"
 	"log"
 	"net/http"
 	"time"
@@ -13,35 +12,30 @@ func (r *Responseheaders) ConcurrentCheck() bool {
 
 	accept_range := r.accept_ranges
 
-	if accept_range == "" {
-		return false
-	} else {
+	if accept_range == "bytes" {
 		return true
+	} else {
+		return false
 	}
 }
 
-func (d *DownloadInfo) maxim() {
+// Current Requirement for this to work nicely and do the task eassily for us
+// Managing the incoming request and based on that  pass the request based on the availability of concurrent approach and all shit
+func (d *DownloadInfo) Maxim() {
 
-	h2t := &http2.Transport{
-		DialTLSContext: dialUTLS,
-		// AllowHTTP: false, // keep false for real use
-	}
+	ht := NewDualTransport()
+	var chain http.RoundTripper = ht
+	chain = &uTLSTransport{Next: ht}
 
-	// DefaultTransport is also RoundTripper casuse it has the RoundTrip method with it
-	// so now in this condition it was like we have to  have to remove that for teh internet request andd add the new one her eit is the h2t
-	// which is also a Transport but not the DefaultTransport one , but it satisfy condition ,plus with our custom TLS thing ,  and the uTLSuTLSTransport struct will create the request to the h2t with those uTuTLSTransport RoundTrip request added Headers
-	var chain http.RoundTripper = h2t
+	// chain = &LocalCookieTransport{Next: chain}
+	// chain = &SolverTransport{Next: chain}
+	client := &http.Client{Transport: chain, Timeout: 10 * time.Minute}
 
-	chain = &uTLSTransport{Next: h2t}
-	chain = &LocalCookieTransport{Next: chain}
-	chain = &SolverTransport{Next: chain}
-
-	client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", d.Rs.Link, nil)
+	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
 	if err != nil {
 		log.Printf("[Downloader] Error Ocurred <http Client GET req> : %v\n", err)
 	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println("[Downloader] Network error")
@@ -53,12 +47,12 @@ func (d *DownloadInfo) maxim() {
 		log.Println("[Downloader] Failure :", resp.StatusCode)
 		return
 	}
-
 	req_head := ServerResponse(resp.Header)
+	// we need to pass the  variable  somewhere to there so that it happen here easily without  unecessary problem in
 	if req_head.ConcurrentCheck() {
-		d.ConcurrentDownloader()
+		d.ConcurrentDownloader(req_head, client)
 	} else {
-		d.DownloadNormal()
+		d.DownloadNormal(req_head, client)
 	}
 
 }

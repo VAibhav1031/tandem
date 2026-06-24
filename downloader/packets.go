@@ -111,20 +111,20 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 	//5 fallback (default type .txt .bin or just default with no extensiongiven)
 }
 
-func (d *DownloadInfo) DownloadNormal() {
+func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Client) {
 
-	ht := NewDualTransport()
-
-	// DefaultTransport is also RoundTripper casuse it has the RoundTrip method with it
-	// so now in this condition it was like we have to  have to remove that for teh internet request andd add the new one her eit is the h2t
-	// which is also a Transport but not the DefaultTransport one , but it satisfy condition ,plus with our custom TLS thing ,  and the uTLSuTLSTransport struct will create the request to the h2t with those uTuTLSTransport RoundTrip request added Headers
-	var chain http.RoundTripper = ht
-
-	chain = &uTLSTransport{Next: ht}
-	chain = &LocalCookieTransport{Next: chain}
-	chain = &SolverTransport{Next: chain}
-
-	client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
+	// ht := NewDualTransport()
+	//
+	// // DefaultTransport is also RoundTripper casuse it has the RoundTrip method with it
+	// // so now in this condition it was like we have to  have to remove that for teh internet request andd add the new one her eit is the h2t
+	// // which is also a Transport but not the DefaultTransport one , but it satisfy condition ,plus with our custom TLS thing ,  and the uTLSuTLSTransport struct will create the request to the h2t with those uTuTLSTransport RoundTrip request added Headers
+	// var chain http.RoundTripper = ht
+	//
+	// chain = &uTLSTransport{Next: ht}
+	// chain = &LocalCookieTransport{Next: chain}
+	// chain = &SolverTransport{Next: chain}
+	//
+	// client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
 
 	req, err := http.NewRequest("GET", d.Rs.Link, nil)
 	if err != nil {
@@ -142,7 +142,8 @@ func (d *DownloadInfo) DownloadNormal() {
 		return
 	}
 
-	req_head := ServerResponse(resp.Header)
+	// req_head := ServerResponse(resp.Header)
+
 	filename, filetype := req_head.getFileInfo(d.Rs.Link)
 	fmt.Println(filename, filetype)
 	var contentType string
@@ -242,28 +243,31 @@ type conCurrentDet struct {
 // mostly it would something like  http request and the copy  there is some problem to occur
 const globalLimit int = 3
 
-func (d *DownloadInfo) ConcurrentDownloader() {
+func (d *DownloadInfo) ConcurrentDownloader(headers *Responseheaders, client *http.Client) {
 
-	ht := NewDualTransport()
-	var chain http.RoundTripper = ht
-	chain = &uTLSTransport{Next: ht}
-	client := &http.Client{Transport: chain, Timeout: 10 * time.Minute}
-	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
+	// ht := NewDualTransport()
+	// var chain http.RoundTripper = ht
+	// chain = &uTLSTransport{Next: ht}
+	// client := &http.Client{Transport: chain, Timeout: 10 * time.Minute}
+	// req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
+	// if err != nil {
+	// 	log.Printf("[Concurrent-Error]: %v", err)
+	// }
+	// resp, err := client.Do(req)
+	//
+	// if err != nil {
+	// 	log.Printf("[Concurrent-Error]:  %v ", err)
+	// 	return
+	// }
+	//
+	// if resp.StatusCode != 200 {
+	// 	log.Printf("[Concurrent-Error]:  %v , Code-> %d", err, resp.StatusCode)
+	// 	return
+	// }
+	// defer resp.Body.Close()
+	// headers := ServerResponse(resp.Header)
 
-	resp, err := client.Do(req)
-
-	if err != nil {
-		log.Printf("[Concurrent-Error]: %v code ->%v", err)
-		return
-	}
-
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		log.Printf("[Concurrent-Error]: %v", err)
-		return
-	}
 	d.cn.n = 4
-	headers := ServerResponse(resp.Header)
 	total_size, _ := strconv.Atoi(headers.content_length)
 	log.Println("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
 
@@ -279,7 +283,7 @@ func (d *DownloadInfo) ConcurrentDownloader() {
 	for i := 0; i < d.cn.n; i++ {
 		// current outer variables limit, start, is the passed one , the outer is the globalLimit one
 
-		log.Printf("GOROUTinE %d-->Start: %d, limit: %d", i, start, limit)
+		log.Printf("GOROUTINE %d-->Start: %d, limit: %d", i, start, limit)
 
 		// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		wg.Add(1)
@@ -310,7 +314,7 @@ func (d *DownloadInfo) ConcurrentDownloader() {
 					log.Printf("[Concurrent-Error]: Connection Failed %v, ", err)
 					// exit the goroutine thing...:_)
 					current++
-					resp.Body.Close()
+					// resp.Body.Close()
 					time.Sleep(1 * time.Second)
 					continue
 				}
