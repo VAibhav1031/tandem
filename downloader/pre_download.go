@@ -118,7 +118,8 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 	log.Printf("[Tier1]-[spook_TLS]: HOST %v", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
-		ServerName: host,
+		ServerName:         host,
+		ClientSessionCache: utls.NewLRUClientSessionCache(32),
 		// NextProtos is set automatically by HelloChrome_Auto to include
 		// "h2" and "http/1.1", so ALPN negotiation works correctly.
 		NextProtos: []string{"h2", "http/1.1"}, // ALPN
@@ -187,10 +188,10 @@ func NewDualTransport() *DualTransport {
 		}
 
 		uConn := utls.UClient(tcpConn, &utls.Config{
-			ServerName: host,
-			// NextProtos is set automatically by HelloChrome_Auto to include
-			// "h2" and "http/1.1", so ALPN negotiation works correctly.
-			NextProtos: []string{"h2", "http/1.1"}, // ALPN
+
+			ServerName:         host,
+			ClientSessionCache: utls.NewLRUClientSessionCache(32), // it usually save the initially session ticket of the  server, during the tls handshake
+			NextProtos:         []string{"h2", "http/1.1"},        // ALPN
 		}, utls.HelloChrome_Auto)
 
 		if err := uConn.HandshakeContext(ctx); err != nil {
@@ -263,8 +264,9 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	log.Printf("[Tier1]-[spook_TLS]: HOST %v", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
-		ServerName: host,
-		NextProtos: []string{"h2", "http/1.1"}, // ALPN
+		ServerName:         host,
+		ClientSessionCache: utls.NewLRUClientSessionCache(32),
+		NextProtos:         []string{"h2", "http/1.1"}, // ALPN
 	}, utls.HelloChrome_Auto)
 
 	if err := uConn.Handshake(); err != nil {

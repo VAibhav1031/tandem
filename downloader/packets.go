@@ -228,7 +228,7 @@ type conCurrentDet struct {
 // there should be loop if thinsg is done in go then loop would break , else increas but the counter will also increase and with reached limit it will break and with check of counter value eq tro the the total limit will return the error andallshit
 
 // mostly it would something like  http request and the copy  there is some problem to occur
-const globalLimit int = 3
+const globalLimit int = 4
 
 func (d *DownloadInfo) ConcurrentDownloader(headers *Responseheaders, client *http.Client) {
 
@@ -252,19 +252,22 @@ func (d *DownloadInfo) ConcurrentDownloader(headers *Responseheaders, client *ht
 
 		// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		wg.Add(1)
-		go func(start int64, limit int64) {
+		go func(chunkStart int64, chunkLimit int64) {
 			defer wg.Done()
+
+			var currentOffset = chunkStart
+			expectedLimit := chunkLimit
 
 			// there is a new client is being created here , and all shit
 			// client := &http.Client{Transport: chain, Timeout: 30 * time.Second}
-			req, err := http.NewRequest("GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
-			if err != nil {
-				log.Println("[Concurrent-ERROR]: ", err)
-			}
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, limit-1))
 			// request based on the range and allshit
 			current := 0
 			for {
+
+				remainingBytes := expectedLimit - currentOffset
+				if remainingBytes < 0 {
+					return
+				}
 
 				if current == globalLimit {
 					d.cn.mw.Lock()
@@ -274,6 +277,11 @@ func (d *DownloadInfo) ConcurrentDownloader(headers *Responseheaders, client *ht
 					return
 				}
 
+				req, err := http.NewRequest("GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
+				if err != nil {
+					log.Println("[Concurrent-ERROR]: ", err)
+				}
+				req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", currentOffset, expectedLimit-1))
 				resp, err := client.Do(req)
 				if err != nil {
 					log.Printf("[Concurrent-Error]: Connection Failed %v, ", err)
@@ -291,18 +299,49 @@ func (d *DownloadInfo) ConcurrentDownloader(headers *Responseheaders, client *ht
 					continue
 				}
 
-				// read to the correct section of the buffer
-				destBuffer := d.cn.buffer[start:limit]
 				// Since each slice of the buffere is not overlapping , so  there is no need to put the lock over the buffer and we cango easily and it is the design which help it move
-				n, err := io.ReadFull(resp.Body, destBuffer)
-				resp.Body.Close()
-				if n < 0 || err != nil {
-					log.Printf("[Concurrent-Error]: BOOOM!!, start %d: limit %d | Read-up ERR-> %v", start, limit, err)
-					current++
-					continue
+
+				// going for the block read , cause io.ReadFull() all or nothing , here we have to go in progressive way where if any error ocurr we can  store the till the read offset byte , not losing whole and retrying again
+				bufferBlock := make([]byte, 32*1024)
+				for {
+					nr, readErr := resp.Body.Read(bufferBlock)
+					if nr > 0 {
+						copy(d.cn.buffer[currentOffset:currentOffset+int64(nr)], bufferBlock)
+						currentOffset += int64(nr)
+					}
+
+					if readErr != nil {
+						if readErr == io.EOF {
+							break // Read Completely successfully
+						}
+						log.Printf("[Concurrent-Error]:[Network-Interrupted]: Saved  Progress")
+						// few thoughts : could have be the continue andallshit , but yeah we are under the another loop and we have only one was is to exit then close the resp streaming , then  yeah your thinking error and continue thing , that is nice , but we are already saved by the anmother timeout per goroutine client
+
+						// could be too harsh if i add the 'current' incrementor here
+						current++
+						break
+					}
+
 				}
 
-				break
+				resp.Body.Close()
+
+				if currentOffset >= expectedLimit {
+					break
+					// read whole segment not needed anymore
+				}
+				// // read to the correct section of the buffer
+				// destBuffer := d.cn.buffer[currentOffset:expectedLimit]
+				// n, err := io.ReadFull(resp.Body, destBuffer)
+				// if n < 0 || err != nil {
+				// 	log.Printf("[Concurrent-Error]: BOOOM!!, start %d: limit %d | Read-up ERR-> %v", start, limit, err)
+				// 	current++
+				// 	resp.Body.Close()
+				// 	// time.Sleep(1 * time.Second) // could be network lag or something we get interr
+				// 	continue
+				// }
+				//
+				// break
 			}
 
 		}(start, limit)
