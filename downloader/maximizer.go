@@ -33,18 +33,18 @@ func (d *DownloadInfo) Maxim() {
 
 	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
 	if err != nil {
-		log.Printf("[Downloader] Error Ocurred <http Client GET req> : %v\n", err)
+		log.Printf("[Downloader-Maximizer] Error Ocurred <http Client GET req> : %v\n", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("[Downloader] Network error")
+		log.Println("[Downloader-Maximizer] Network error")
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		log.Println("[Downloader] Failure :", resp.StatusCode)
+		log.Printf("[Concurrent-Error]:  %v , Code-> %d", err, resp.StatusCode)
 		return
 	}
 	req_head := ServerResponse(resp.Header)

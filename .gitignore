@@ -1,6 +1,10 @@
+
+# random file
 *.csv
 *.bin
 *.pdf
 *.zip
+*.txt
+
 
 *.sum
