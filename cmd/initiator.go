@@ -1,0 +1,274 @@
+package cmd
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strings"
+	"time"
+
+	"github.com/VAibhav1031/tandem/downloader"
+)
+
+// what is more needed thing for us , which is the simple cli command , where they just start that thing
+// first eithere they pass teh argument and we take the argument and evaluate based on that thing , or we have menus and all shit
+// i think simple state flow mechanics  would be great to go  if i would say soo
+//|| HERE IS THIS||
+// Display of the ASCIII LOGO
+// options
+// Getting details of file , downloading file , .. like this these are options or some
+// then for each work we need to have like pause , resume  and cancel thing , which main goroutine should listen while other worker are working there stuff
+// logs should be on different dedicated folder and
+// till now this is the  basic thing i have too see
+// before that make sure baseline downloadNormal and downloadConcurrent should have all the network intricacies work nicely
+
+type flags struct {
+	url_link     string
+	concurrent_n int
+	filepath     string
+	isResume     bool
+}
+
+// dedicated json file area ~/.local/tandem/jsons
+
+// states and file (means the file is partially  downloaded and it has the state , the best part is that the json doesnt need to store the data ,  it  just need to store the last info just that , and then we are just gonna append write something we can say soo
+// file and no state ( means fully downloaded)
+
+// but the problem is that how we check like we have to check  this detail state is there file and  one more then how we get to know about the file if therre is no ourput location , like we have the following flags
+// -url <link> -concurrent <n> -output <fullpath>
+// then soo
+
+var state_file_path string
+
+func init() {
+
+	home_dir, err := os.UserHomeDir()
+	if err != nil {
+		log.Println("[CMD-initiator-Error]:Error unable to get the Home Directory")
+		return
+	}
+	state_file_path = home_dir + "/.local/tandem/json_data/"
+}
+
+type headersDetails struct {
+	headers *downloader.Responseheaders
+}
+
+var mimeToExt = map[string]string{
+	"text/plain":                "txt",
+	"text/html":                 "html",
+	"text/csv":                  "csv",
+	"application/pdf":           "pdf",
+	"image/jpeg":                "jpg",
+	"image/png":                 "png",
+	"application/zip":           "zip",
+	"application/octect-stream": "bin",
+}
+
+// state file json format
+// {url:<link>,currentOffset:..,expectedLimit:..,filename:for_which_file}
+
+type State_File_Format struct {
+	Url           string `json:"url"`
+	CurrentOffset int64  `json:"currentOffset"`
+	ExpectedLimit int64  `json:"expectedLimit"`
+	Filepath      string `json:"filepath"`
+}
+
+func getExtensionFromUrl(rawUrl string) string {
+
+	u, err := url.Parse(rawUrl)
+	if err != nil {
+		return ""
+	}
+	ext := path.Ext(u.Path)
+
+	return ext
+}
+func (r *headersDetails) getFileInfo(url string) (string, string) {
+
+	if r.headers.Content_deposition != "" {
+		file_name := strings.Split(r.headers.Content_deposition, "filename=")[1]
+		file_type := strings.Split(file_name, ".")[1]
+
+		fmt.Println("THIS IS IT")
+		return file_name, file_type
+
+	}
+
+	if r.headers.Content_type != "" {
+		// file_type := strings.Split(r.content_type, "/")[1]
+		file_type := mimeToExt[r.headers.Content_type]
+
+		fmt.Println(r.headers.Content_type)
+		return "", file_type
+	}
+
+	return "", getExtensionFromUrl(url)
+
+	//
+	//1 Deposition
+	//2 Content Type
+	//3 URL -Check
+	//4 sniffing (initial packets)
+	//5 fallback (default type .txt .bin or just default with no extensiongiven)
+}
+
+// if the output is not provided then we go with this
+
+// same file name then we
+func (f *flags) dynamicResolution() (string, string, string) {
+	// fmt.Println(filename, filetype)
+	// http request get thing we need the GET , that is when we can do the
+
+	ht := downloader.NewDualTransport()
+	var chain http.RoundTripper = ht
+	chain = &downloader.UTLSTransport{Next: ht}
+
+	client := &http.Client{Transport: chain, Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", f.url_link, nil)
+	if err != nil {
+
+		log.Printf("[CMD-Error]: Error Ocurred <http Client GET req> : %v\n", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+
+		log.Println("[CMD-Error]: Network error")
+	}
+	defer resp.Body.Close()
+
+	server_details := downloader.ServerResponse(resp.Header)
+	h := &headersDetails{headers: server_details}
+	filename, filetype := h.getFileInfo(f.url_link)
+	var contentType string
+	var preview []byte
+
+	if filetype == "" {
+		reader := resp.Body
+		preview = make([]byte, 512)
+
+		_, _ = reader.Read(preview)
+
+		contentType = http.DetectContentType(preview)
+		contentType = strings.Split(contentType, ";")[0]
+		fmt.Println(contentType)
+		filetype = mimeToExt[contentType]
+
+		// fmt.Println(filetype)
+	}
+	var fullpath string
+	var filename_with_type string
+
+	// one problem we have to save the same filename thing , like
+	// FileInfo: filenname with type
+	if filename != "" && filetype == "" {
+		filename_with_type = "/" + filename + ".bin"
+	} else if filename == "" && filetype != "" {
+		filename_with_type = "/download_file" + "." + filetype
+	} else if filename != "" && filetype != "" {
+		filename_with_type = "/" + filename + "." + filetype
+	} else {
+		filename_with_type = "/download_file.bin"
+	}
+
+	// LocationInfo: file location addition , for the fullpath creation
+	if f.filepath != "" {
+		fullpath = f.filepath + filename_with_type
+	} else {
+		current_dir, err := os.Getwd()
+		if err != nil {
+			fmt.Printf("[Concurrent-Downloader]: Error Ocurred <Current Directory>: %v\n", err)
+			return "", "", ""
+		}
+		fullpath = current_dir + filename_with_type
+		// fmt.Println("I am in else")
+	}
+
+	// // client request
+	//  based on the header check for the
+	return filename, filetype, fullpath
+}
+
+// we have to return that we have state file and all shit lets go for the download resume
+// else start fresh just that nothing else
+func (f *flags) CheckResume() (bool, string, string) {
+	// check for the flag filepath (included with filename at the end)
+
+	var fullPath string
+	if f.filepath == "" {
+		_, _, fullPath = f.dynamicResolution()
+
+	}
+	increment := 0
+	for {
+		hash := sha256.Sum256([]byte(fullPath))
+
+		hash_file_path := state_file_path + string(hash[:]) + ".json"
+
+		// not ver much good in the working of the os.Stat
+		file_stat, err := os.Stat(hash_file_path)
+		if err != nil {
+			// file present
+			// we have to read adn then we have to
+			file_hash, err := os.OpenFile(hash_file_path, os.O_RDONLY, 0644)
+			if err != nil {
+				log.Println("[CMD-Initiator-Error]: Error in File Opening", err)
+				break
+			}
+			buffer := make([]byte, file_stat.Size())
+			file_hash.Read(buffer)
+
+			var json_dedact State_File_Format
+			err = json.Unmarshal(buffer, &json_dedact)
+			if err != nil {
+				log.Println("[CMD-Initiator-Error]: Error in the State file Unmarshalling State", err)
+				break
+			}
+
+			// check is it the same url it has or not if not then
+			if json_dedact.Url != f.url_link {
+				// no it is nto se // means the hash opened here is of the duplicate path of the download  we need to  increment that
+				increment++
+				splited_value := strings.Split(fullPath, "/")
+				fullPath = splited_value[len(splited_value)] + fmt.Sprint("download_file(%d)", increment)
+				continue // check again for this filepath
+
+			} else {
+				//Resume safely
+
+				return true, fullPath, state_file_path
+			}
+
+		} else if errors.Is(err, os.ErrNotExist) {
+			// not present
+			_, err := os.Stat(fullPath)
+			if err != nil {
+				// filepath of same name file  exist but no state_file
+				increment++
+				splited_value := strings.Split(fullPath, "/")
+				fullPath = splited_value[len(splited_value)] + fmt.Sprint("download_file(%d)", increment)
+				continue // check again for this filepath
+
+			} else if errors.Is(err, os.ErrNotExist) {
+
+				// Start Fresh  filepath doesnt exist , means it is freash to start
+				// return start_fresh
+				return true, fullPath, state_file_path
+			}
+		}
+	}
+
+	return false, "", ""
+}
+func Usage() {
+
+	multi_usage := ``
+	fmt.Println(multi_usage)
+}

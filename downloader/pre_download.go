@@ -42,11 +42,11 @@ type FlareSolverrResponse struct {
 
 var GlobalCookieCache = cookies.CookieSolver()
 
-type uTLSTransport struct {
+type UTLSTransport struct {
 	Next http.RoundTripper
 }
 
-func (t *uTLSTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *UTLSTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Match headers to the HelloChrome_Auto fingerprint version.
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "+

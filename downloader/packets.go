@@ -31,10 +31,10 @@ type RequestServer struct {
 }
 
 type Responseheaders struct {
-	content_length     string
-	content_type       string
-	content_deposition string
-	accept_ranges      string
+	Content_length     string
+	Content_type       string
+	Content_deposition string
+	Accept_ranges      string
 	// headers            http.Header
 }
 
@@ -62,7 +62,7 @@ func NewServerLink(link string, n int8, location string) *RequestServer {
 
 func ServerResponse(headers http.Header) *Responseheaders {
 
-	return &Responseheaders{content_length: headers.Get("Content-Length"), content_type: headers.Get("Content-Type"), accept_ranges: headers.Get("Accept-Ranges")}
+	return &Responseheaders{Content_length: headers.Get("Content-Length"), Content_type: headers.Get("Content-Type"), Accept_ranges: headers.Get("Accept-Ranges")}
 
 }
 
@@ -84,8 +84,8 @@ func getExtensionFromUrl(rawUrl string) string {
 
 func (r *Responseheaders) getFileInfo(url string) (string, string) {
 
-	if r.content_deposition != "" {
-		file_name := strings.Split(r.content_deposition, "filename=")[1]
+	if r.Content_deposition != "" {
+		file_name := strings.Split(r.Content_deposition, "filename=")[1]
 		file_type := strings.Split(file_name, ".")[1]
 
 		fmt.Println("THIS IS IT")
@@ -93,11 +93,11 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 
 	}
 
-	if r.content_type != "" {
+	if r.Content_type != "" {
 		// file_type := strings.Split(r.content_type, "/")[1]
-		file_type := mimeToExt[r.content_type]
+		file_type := mimeToExt[r.Content_type]
 
-		fmt.Println(r.content_type)
+		fmt.Println(r.Content_type)
 		return "", file_type
 	}
 
@@ -233,10 +233,9 @@ const globalLimit int = 4
 func (d *DownloadInfo) ConcurrentDownloader(headers *Responseheaders, client *http.Client) {
 
 	d.cn.n = 4
-	total_size, _ := strconv.Atoi(headers.content_length)
+	total_size, _ := strconv.Atoi(headers.Content_length)
 	log.Println("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
 
-	//**************current_Problem
 	batch_size := int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problems
 	log.Printf("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
 	d.cn.buffer = make([]byte, total_size)

@@ -10,7 +10,7 @@ import (
 
 func (r *Responseheaders) ConcurrentCheck() bool {
 
-	accept_range := r.accept_ranges
+	accept_range := r.Accept_ranges
 
 	if accept_range == "bytes" {
 		return true
@@ -25,7 +25,7 @@ func (d *DownloadInfo) Maxim() {
 
 	ht := NewDualTransport()
 	var chain http.RoundTripper = ht
-	chain = &uTLSTransport{Next: ht}
+	chain = &UTLSTransport{Next: ht}
 
 	// chain = &LocalCookieTransport{Next: chain}
 	// chain = &SolverTransport{Next: chain}
@@ -33,12 +33,12 @@ func (d *DownloadInfo) Maxim() {
 
 	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
 	if err != nil {
-		log.Printf("[Downloader-Maximizer] Error Ocurred <http Client GET req> : %v\n", err)
+		log.Printf("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : %v\n", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("[Downloader-Maximizer] Network error")
+		log.Println("[Downloader-Maximizer]: Network error")
 	}
 
 	defer resp.Body.Close()
