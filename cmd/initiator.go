@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/VAibhav1031/tandem/downloader"
 	"log"
 	"net/http"
 	"net/url"
@@ -12,14 +13,12 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"github.com/VAibhav1031/tandem/downloader"
 )
 
 // what is more needed thing for us , which is the simple cli command , where they just start that thing
 // first eithere they pass teh argument and we take the argument and evaluate based on that thing , or we have menus and all shit
 // i think simple state flow mechanics  would be great to go  if i would say soo
-//|| HERE IS THIS||
+// || HERE IS THIS||
 // Display of the ASCIII LOGO
 // options
 // Getting details of file , downloading file , .. like this these are options or some
@@ -27,13 +26,24 @@ import (
 // logs should be on different dedicated folder and
 // till now this is the  basic thing i have too see
 // before that make sure baseline downloadNormal and downloadConcurrent should have all the network intricacies work nicely
-
-type flags struct {
-	url_link     string
-	concurrent_n int
-	filepath     string
-	isResume     bool
+type Flags struct {
+	Url_link     string
+	Concurrent_n int
+	Filepath     string
 }
+
+type ResultFlow struct {
+	Result        string
+	Fullpath      string
+	HashStateFile string
+	StateFile     *downloader.State_File_Format
+}
+
+const (
+	CanResume = "resume"
+	CanStart  = "fresh"
+	Nothing   = "no"
+)
 
 // dedicated json file area ~/.local/tandem/jsons
 
@@ -46,6 +56,8 @@ type flags struct {
 
 var state_file_path string
 
+const state_file_location = "/.local/tandem/json_data/"
+
 func init() {
 
 	home_dir, err := os.UserHomeDir()
@@ -53,7 +65,7 @@ func init() {
 		log.Println("[CMD-initiator-Error]:Error unable to get the Home Directory")
 		return
 	}
-	state_file_path = home_dir + "/.local/tandem/json_data/"
+	state_file_path = home_dir + state_file_location
 }
 
 type headersDetails struct {
@@ -69,16 +81,6 @@ var mimeToExt = map[string]string{
 	"image/png":                 "png",
 	"application/zip":           "zip",
 	"application/octect-stream": "bin",
-}
-
-// state file json format
-// {url:<link>,currentOffset:..,expectedLimit:..,filename:for_which_file}
-
-type State_File_Format struct {
-	Url           string `json:"url"`
-	CurrentOffset int64  `json:"currentOffset"`
-	ExpectedLimit int64  `json:"expectedLimit"`
-	Filepath      string `json:"filepath"`
 }
 
 func getExtensionFromUrl(rawUrl string) string {
@@ -123,7 +125,7 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 // if the output is not provided then we go with this
 
 // same file name then we
-func (f *flags) dynamicResolution() (string, string, string) {
+func (f *Flags) dynamicResolution() (string, string, string) {
 	// fmt.Println(filename, filetype)
 	// http request get thing we need the GET , that is when we can do the
 
@@ -132,7 +134,7 @@ func (f *flags) dynamicResolution() (string, string, string) {
 	chain = &downloader.UTLSTransport{Next: ht}
 
 	client := &http.Client{Transport: chain, Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", f.url_link, nil)
+	req, err := http.NewRequest("GET", f.Url_link, nil)
 	if err != nil {
 
 		log.Printf("[CMD-Error]: Error Ocurred <http Client GET req> : %v\n", err)
@@ -146,7 +148,7 @@ func (f *flags) dynamicResolution() (string, string, string) {
 
 	server_details := downloader.ServerResponse(resp.Header)
 	h := &headersDetails{headers: server_details}
-	filename, filetype := h.getFileInfo(f.url_link)
+	filename, filetype := h.getFileInfo(f.Url_link)
 	var contentType string
 	var preview []byte
 
@@ -179,8 +181,8 @@ func (f *flags) dynamicResolution() (string, string, string) {
 	}
 
 	// LocationInfo: file location addition , for the fullpath creation
-	if f.filepath != "" {
-		fullpath = f.filepath + filename_with_type
+	if f.Filepath != "" {
+		fullpath = f.Filepath + filename_with_type
 	} else {
 		current_dir, err := os.Getwd()
 		if err != nil {
@@ -198,19 +200,19 @@ func (f *flags) dynamicResolution() (string, string, string) {
 
 // we have to return that we have state file and all shit lets go for the download resume
 // else start fresh just that nothing else
-func (f *flags) CheckResume() (bool, string, string) {
+func (f *Flags) CheckResume() ResultFlow {
 	// check for the flag filepath (included with filename at the end)
-
+	var result_flow ResultFlow
 	var fullPath string
-	if f.filepath == "" {
+	if f.Filepath == "" {
 		_, _, fullPath = f.dynamicResolution()
 
 	}
+	hash := sha256.Sum256([]byte(fullPath))
+	hash_file_path := state_file_path + string(hash[:]) + ".json"
+
 	increment := 0
 	for {
-		hash := sha256.Sum256([]byte(fullPath))
-
-		hash_file_path := state_file_path + string(hash[:]) + ".json"
 
 		// not ver much good in the working of the os.Stat
 		file_stat, err := os.Stat(hash_file_path)
@@ -224,8 +226,9 @@ func (f *flags) CheckResume() (bool, string, string) {
 			}
 			buffer := make([]byte, file_stat.Size())
 			file_hash.Read(buffer)
+			file_hash.Close() // Closing Time....
 
-			var json_dedact State_File_Format
+			var json_dedact downloader.State_File_Format
 			err = json.Unmarshal(buffer, &json_dedact)
 			if err != nil {
 				log.Println("[CMD-Initiator-Error]: Error in the State file Unmarshalling State", err)
@@ -233,7 +236,7 @@ func (f *flags) CheckResume() (bool, string, string) {
 			}
 
 			// check is it the same url it has or not if not then
-			if json_dedact.Url != f.url_link {
+			if json_dedact.Url != f.Url_link {
 				// no it is nto se // means the hash opened here is of the duplicate path of the download  we need to  increment that
 				increment++
 				splited_value := strings.Split(fullPath, "/")
@@ -242,8 +245,11 @@ func (f *flags) CheckResume() (bool, string, string) {
 
 			} else {
 				//Resume safely
-
-				return true, fullPath, state_file_path
+				result_flow.Result = CanResume
+				result_flow.Fullpath = fullPath
+				result_flow.HashStateFile = hash_file_path
+				result_flow.StateFile = &json_dedact
+				return result_flow
 			}
 
 		} else if errors.Is(err, os.ErrNotExist) {
@@ -260,15 +266,20 @@ func (f *flags) CheckResume() (bool, string, string) {
 
 				// Start Fresh  filepath doesnt exist , means it is freash to start
 				// return start_fresh
-				return true, fullPath, state_file_path
+				result_flow.Result = CanStart
+				result_flow.Fullpath = fullPath
+				result_flow.HashStateFile = hash_file_path
+				return result_flow
+
 			}
 		}
 	}
 
-	return false, "", ""
+	result_flow.Result = Nothing
+	return result_flow
 }
 func Usage() {
-
+	// need to
 	multi_usage := ``
 	fmt.Println(multi_usage)
 }
