@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-	// "github.com/VAibhav1031/tandem/cmd"
 )
 
 func (r *Responseheaders) ConcurrentCheck() bool {
@@ -35,16 +34,22 @@ type State_File_Format struct {
 
 // hgere it will come
 type concurrentFlow struct {
-	ctx     context.Context
-	client  http.Client
-	headers *Responseheaders
-	stf     State_File_Format
-	// isReady bool
+	ctx       context.Context
+	client    http.Client
+	headers   *Responseheaders
+	resumeStf State_File_Format
+	stf       State_File_Format
+	isReady   bool
+}
+
+type StateFile struct {
+	Resume_stf *State_File_Format
+	Stf        *State_File_Format
 }
 
 // Current Requirement for this to work nicely and do the task eassily for us
 // Managing the incoming request and based on that  pass the request based on the availability of concurrent approach and all shit
-func (d *DownloadInfo) Maxim(ctx context.Context, stf State_File_Format) {
+func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
 
 	ht := NewDualTransport()
 	var chain http.RoundTripper = ht
@@ -78,16 +83,18 @@ func (d *DownloadInfo) Maxim(ctx context.Context, stf State_File_Format) {
 		// we need to check the stf is populated or not , if it is tghen  we ould go  and tghen there is one more thing
 		// if stf.
 		var conFlow concurrentFlow
-		if stf.Url == "" {
+		if f_stf.Resume_stf.Url == "" {
 
 			conFlow.client = *client
 			conFlow.headers = req_head
 			conFlow.ctx = ctx
 		} else {
 			conFlow.client = *client
-			conFlow.stf = stf
+			// give both for the usecase normal one and other
+			conFlow.resumeStf = *f_stf.Resume_stf
+			conFlow.stf = *f_stf.Stf
 			conFlow.ctx = ctx
-
+			conFlow.isReady = true
 		}
 		d.ConcurrentDownloader(conFlow)
 	} else {

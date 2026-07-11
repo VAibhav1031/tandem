@@ -17,7 +17,7 @@ import (
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/publicsuffix"
 
-	"github.com/VAibhav1031/tandem/cookiesManager"
+	"github.com/VAibhav1031/tandem/internal/cookiesManager"
 	"golang.org/x/net/http2"
 )
 

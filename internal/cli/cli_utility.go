@@ -1,11 +1,11 @@
-package cmd
+package cli
 
 import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/VAibhav1031/tandem/downloader"
+	"github.com/VAibhav1031/tandem/internal/downloader"
 	"log"
 	"net/http"
 	"net/url"
@@ -15,17 +15,20 @@ import (
 	"time"
 )
 
-// what is more needed thing for us , which is the simple cli command , where they just start that thing
-// first eithere they pass teh argument and we take the argument and evaluate based on that thing , or we have menus and all shit
-// i think simple state flow mechanics  would be great to go  if i would say soo
-// || HERE IS THIS||
-// Display of the ASCIII LOGO
-// options
-// Getting details of file , downloading file , .. like this these are options or some
-// then for each work we need to have like pause , resume  and cancel thing , which main goroutine should listen while other worker are working there stuff
-// logs should be on different dedicated folder and
-// till now this is the  basic thing i have too see
-// before that make sure baseline downloadNormal and downloadConcurrent should have all the network intricacies work nicely
+func Banner() {
+	asciiArt := `$$$$$$$$\       	         $$\                         
+	\__$$  __|                       $$ |                        
+	$$ | $$$$$$\  $$$$$$$\   $$$$$$$ | $$$$$$\  $$$$$$\$$\$$\  
+	$$ | \____$$\ $$  __$$\ $$  __$$ |$$  __$$\ $$  _$$  _$$\ 
+	$$ | $$$$$$$ |$$ |  $$ |$$ /  $$ |$$$$$$$$ |$$ / $$ / $$ |
+	$$ |$$  __$$ |$$ |  $$ |$$ |  $$ |$$   ____|$$ | $$ | $$ |
+	$$ |\$$$$$$$ |$$ |  $$ |\$$$$$$$ |\$$$$$$$\ $$ | $$ | $$ |
+	\__| \_______|\__|  \__| \_______| \_______|\__| \__| \__|`
+
+	fmt.Println(asciiArt)
+
+}
+
 type Flags struct {
 	Url_link     string
 	Concurrent_n int
