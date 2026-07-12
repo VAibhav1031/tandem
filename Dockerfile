@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o tandem ./cmd/tandem/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o tandem ./cmd/tandem-cli/main.go
 
 
 
