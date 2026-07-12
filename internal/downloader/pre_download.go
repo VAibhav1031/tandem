@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"crypto/tls"
@@ -57,7 +57,7 @@ func (t *UTLSTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br ,zstd")
 
 	if req.Header.Get("Cookie") != "" {
-		log.Println("[Tier 1] Cookie is set ..")
+		slog.Info("[Tier 1] Cookie is set ..")
 
 	}
 	return t.Next.RoundTrip(req)
@@ -88,16 +88,16 @@ func (t *LocalCookieTransport) RoundTrip(req *http.Request) (*http.Response, err
 		t.HomeDomain = getBaseDomain(req.URL.String())
 	}
 	currentBase := getBaseDomain(req.URL.String())
-	log.Println("[Tier 2] Base domain ", t.HomeDomain)
+	slog.Info("[Tier 2] Base domain ", t.HomeDomain)
 	if currentBase == t.HomeDomain {
 		if GlobalCookieCache != "" {
-			log.Println("[Tier 2] Currently they are same and we got the GlobalCookieCache,", GlobalCookieCache)
+			slog.Info("[Tier 2] Currently they are same and we got the GlobalCookieCache,", GlobalCookieCache)
 
 			req.Header.Set("Cookie", "cf_clearance="+GlobalCookieCache)
 		}
 	} else {
 		req.Header.Del("Cookie")
-		log.Printf("[Tier 2] Cross-domain Jump: %s -> %s. Cookies Stripped", t.HomeDomain, currentBase)
+		slog.Info("[Tier 2] Cross-domain Jump: %s -> %s. Cookies Stripped", t.HomeDomain, currentBase)
 	}
 	return t.Next.RoundTrip(req)
 }
@@ -115,7 +115,7 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 		tcpConn.Close()
 		return nil, fmt.Errorf("split host/port: %w", err)
 	}
-	log.Printf("[Tier1]-[spook_TLS]: HOST %v", host)
+	slog.Info("[Tier1]-[spook_TLS]: HOST %v", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName:         host,
@@ -138,7 +138,7 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 			uConn.ConnectionState().NegotiatedProtocol)
 	}
 
-	log.Println("[Tier 1]-[spook_TLS] dialTLS worked as intended to... ")
+	slog.Info("[Tier 1]-[spook_TLS] dialTLS worked as intended to... ")
 	return uConn, nil
 }
 
@@ -261,7 +261,7 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		tcpConn.Close()
 		return nil, fmt.Errorf("split host/port: %w", err)
 	}
-	log.Printf("[Tier1]-[spook_TLS]: HOST %v", host)
+	slog.Info("[Tier1]-[spook_TLS]: HOST %v", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName:         host,
@@ -301,7 +301,7 @@ type SolverTransport struct {
 
 func (t *SolverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// 1. Send the request down the chain
-	log.Println("[Tier 3] Pass the Request Forward")
+	slog.Info("[Tier 3] Pass the Request Forward")
 	resp, err := t.Next.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -310,30 +310,30 @@ func (t *SolverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// 2. RIPPLE BACK check: Did Cloudflare block us with a challenge?
 	// (Your exact debug header was "Cf-Mitigated: [challenge]")
 	if resp.StatusCode == 403 && resp.Header.Get("Cf-Mitigated") == "challenge" {
-		fmt.Println("======================First-Two-Level-FAILED=======================")
-		log.Println("[Tier 3] ALERT: Cloudflare Challenge Detected (Cf-Mitigated: [challenge])!")
-		log.Println("[Tier 3] Local cookie failed or was expired.")
+		slog.Info("[Tier 3 ] First-Two-Level-FAILED !!")
+		slog.Info("[Tier 3] ALERT: Cloudflare Challenge Detected (Cf-Mitigated: [challenge])!")
+		slog.Info("[Tier 3] Local cookie failed or was expired.")
 
 		// ALWAYS close the rejected response body to prevent memory leaks
 		resp.Body.Close()
 
 		// 3. Trigger Tier 3 solver logic (FlareSolverr or prompt user)
-		log.Println("[Tier 3] Spinning up solver sequence...")
+		slog.Error("[Tier 3] Spinning up solver sequence...")
 
 		newCookie, solvedUA, err := runFlareSolverr(req.URL.String())
 		if err == nil {
 			// 4. Update our local SQLite/disk cache so we have it for next time
-			log.Println("[Tier 3] New Cookie: ", newCookie)
+			slog.Info("[Tier 3] New Cookie: ", newCookie)
 			GlobalCookieCache = newCookie
-			log.Println("[Tier 3] Fresh cookie cached successfully.")
+			slog.Info("[Tier 3] Fresh cookie cached successfully.")
 
 			req.Header.Set("User-Agent", solvedUA)
 
 			// 5. RETRY: Send the request down the chain a second time
-			log.Println("[Tier 3] Retrying request with the fresh cookie...\n")
+			slog.Info("[Tier 3] Retrying request with the fresh cookie...\n")
 			return t.Next.RoundTrip(req)
 		}
-		log.Printf("[Tier 3] Err : %v", err)
+		slog.Info("[Tier 3] Err : %v", err)
 	}
 	// If no challenge, just let the successful response ripple back normally
 	return resp, nil

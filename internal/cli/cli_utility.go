@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/VAibhav1031/tandem/internal/downloader"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/VAibhav1031/tandem/internal/downloader"
+	"log/slog"
 )
 
 func Banner() {
@@ -65,7 +66,7 @@ func init() {
 
 	home_dir, err := os.UserHomeDir()
 	if err != nil {
-		log.Println("[CMD-initiator-Error]:Error unable to get the Home Directory")
+		slog.Error("[CMD-initiator-Error]:Error unable to get the Home Directory")
 		return
 	}
 	state_file_path = home_dir + state_file_location
@@ -102,7 +103,6 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 		file_name := strings.Split(r.headers.Content_deposition, "filename=")[1]
 		file_type := strings.Split(file_name, ".")[1]
 
-		fmt.Println("THIS IS IT")
 		return file_name, file_type
 
 	}
@@ -115,6 +115,7 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 		return "", file_type
 	}
 
+	slog.Info("Filename, file_type choosen correctly")
 	return "", getExtensionFromUrl(url)
 
 	//
@@ -140,12 +141,12 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	req, err := http.NewRequest("GET", f.Url_link, nil)
 	if err != nil {
 
-		log.Printf("[CMD-Error]: Error Ocurred <http Client GET req> : %v\n", err)
+		slog.Error("[CMD-Error]: Error Ocurred <http Client GET req> : %v\n", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 
-		log.Println("[CMD-Error]: Network error")
+		slog.Error("[CMD-Error]: Network error")
 	}
 	defer resp.Body.Close()
 
@@ -224,7 +225,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			// we have to read adn then we have to
 			file_hash, err := os.OpenFile(hash_file_path, os.O_RDONLY, 0644)
 			if err != nil {
-				log.Println("[CMD-Initiator-Error]: Error in File Opening", err)
+				slog.Error("[CMD-Initiator-Error]: Error in File Opening", err)
 				break
 			}
 			buffer := make([]byte, file_stat.Size())
@@ -234,7 +235,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			var json_dedact downloader.State_File_Format
 			err = json.Unmarshal(buffer, &json_dedact)
 			if err != nil {
-				log.Println("[CMD-Initiator-Error]: Error in the State file Unmarshalling State", err)
+				slog.Error("[CMD-Initiator-Error]: Error in the State file Unmarshalling State", err)
 				break
 			}
 

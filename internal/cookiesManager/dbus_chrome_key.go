@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	// "fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/godbus/dbus/v5"
@@ -46,7 +46,7 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	// which return the placeholder and sessionPath for that thing in return
 	err := service.Call("org.freedesktop.Secret.Service.OpenSession", 0, "plain", dbus.MakeVariant("")).Store(&placeHolder, &sessionPath)
 	if err != nil {
-		log.Printf("[gnomeKey] : OpenSession Failed = %v", err)
+		slog.Error("[gnomeKey] : OpenSession Failed = %v", err)
 		return fallback()
 	}
 
@@ -59,12 +59,12 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	var locked []dbus.ObjectPath
 	err = service.Call("org.freedesktop.Secret.Service.SearchItems", 0, attrs).Store(&unlocked, &locked)
 	if err != nil {
-		log.Println("SearchItems failed:", err)
+		slog.Error("SearchItems failed:", err)
 		return fallback()
 	}
 
 	if len(unlocked) == 0 && len(locked) == 0 {
-		log.Println("[gnomeKey] : no keyring entry found, fallback()..")
+		slog.Error("[gnomeKey] : no keyring entry found, fallback()..")
 		return fallback()
 	}
 
@@ -81,13 +81,13 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	err = service.Call("org.freedesktop.Secret.Service.GetSecrets", 0, items, sessionPath).
 		Store(&secrets)
 	if err != nil {
-		log.Printf("[gnomeKey] : GetSecrets failed = '%v', fallback()..", err)
+		slog.Error("[gnomeKey] : GetSecrets failed = '%v', fallback()..", err)
 		return fallback()
 	}
 
 	secret, ok := secrets[items[0]]
 	if !ok {
-		log.Println("[gnomeKey] : secret not found, fallback()...")
+		slog.Error("[gnomeKey] : secret not found, fallback()...")
 		return fallback()
 	}
 	value := secret[2].([]byte)
@@ -110,7 +110,7 @@ func kwalletKey(conn *dbus.Conn) []byte {
 		err := kwallet.Call("org.kde.KWallet.open", 0, "kdewallet", int64(0), "go-app").
 			Store(&handle)
 		if err != nil {
-			log.Printf("open failed for %s: %v", service, err)
+			slog.Error("open failed for %s: %v", service, err)
 			continue
 		}
 		// DEBUGGING log
@@ -121,7 +121,7 @@ func kwalletKey(conn *dbus.Conn) []byte {
 		err = kwallet.Call("org.kde.KWallet.readEntry", 0, handle, "Chromium Keys", "Chromium Safe Storage", "go-app").Store(&secret)
 
 		if err != nil || len(secret) == 0 {
-			log.Printf("readEntry failed: %v", err)
+			slog.Error("readEntry failed: %v", err)
 			continue
 		}
 
@@ -130,7 +130,7 @@ func kwalletKey(conn *dbus.Conn) []byte {
 		secret = bytes.TrimRight(secret, "\n")
 		return pbkdf2.Key(secret, []byte("saltysalt"), 1, 16, sha1.New)
 	}
-	log.Println("[kwalletKey] : NO key found, fallback..")
+	slog.Info("[kwalletKey] : NO key found, fallback..")
 	return fallback()
 
 }

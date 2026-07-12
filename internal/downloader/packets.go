@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -114,17 +114,17 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 
 	req, err := http.NewRequest("GET", d.Rs.Link, nil)
 	if err != nil {
-		log.Printf("[Downloader] Error Ocurred <http Client GET req> : %v\n", err)
+		slog.Error("[Downloader] Error Ocurred <http Client GET req> : %v\n", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("[Downloader] Network error", err)
+		slog.Error("[Downloader] Network error", err)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		log.Println("[Downloader] Failure :", resp.StatusCode)
+		slog.Error("[Downloader] Failure :", resp.StatusCode)
 		return
 	}
 
@@ -198,10 +198,10 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 	if !ct.isReady {
 		total_size, _ := strconv.Atoi(ct.headers.Content_length)
-		log.Println("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
+		slog.Error("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
 
 		batch_size := int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problems
-		log.Printf("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
+		slog.Error("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
 		d.cn.buffer = make([]byte, total_size) // make changes to the buffer  with condition and open the last populated version
 		start, limit = int64(0), batch_size
 
@@ -249,7 +249,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 			start, limit = r_det.CurrentOffsets, r_det.ExpectedLimit
 
 		}
-		log.Printf("GOROUTINE %d-->Start: %d, limit: %d", i, start, limit)
+		slog.Error("GOROUTINE %d-->Start: %d, limit: %d", i, start, limit)
 
 		wg.Add(1)
 		go func(chunkStart int64, chunkLimit int64) {
@@ -279,18 +279,18 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 						d.cn.mw.Lock()
 						d.cn.passed = false
 						d.cn.mw.Unlock()
-						log.Println("All Limit Crossed!! Exitting Goroutine..")
+						slog.Error("All Limit Crossed!! Exitting Goroutine..")
 						return
 					}
 
 					req, err := http.NewRequest("GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
 					if err != nil {
-						log.Println("[Concurrent-ERROR]: ", err)
+						slog.Error("[Concurrent-ERROR]: ", err)
 					}
 					req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", currentOffset, expectedLimit-1))
 					resp, err := ct.client.Do(req)
 					if err != nil {
-						log.Printf("[Concurrent-Error]: Connection Failed %v, ", err)
+						slog.Error("[Concurrent-Error]: Connection Failed %v, ", err)
 						// exit the goroutine thing...:_)
 						current++
 						// resp.Body.Close()
@@ -299,7 +299,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 					}
 
 					if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-						log.Printf("[Concurrent-Error]: Unexpected status code : %d", resp.StatusCode)
+						slog.Error("[Concurrent-Error]: Unexpected status code : %d", resp.StatusCode)
 						resp.Body.Close()
 						current++
 						continue
@@ -317,7 +317,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 							if err != nil {
 								d.cn.passed = false
-								log.Printf("[Concurrent-Error]: WriteAt Error %v", err)
+								slog.Error("[Concurrent-Error]: WriteAt Error %v", err)
 								return
 							}
 							// we have the read  body which is like block read thing  which we dont need to have the probelm and now we have use that to write the  thing , cause the WriteAt usually take the buffer byte and currentOFfset from where we have to write andall shit nothing else
@@ -332,7 +332,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 							if readErr == io.EOF {
 								break // Read Completely successfully
 							}
-							log.Printf("[Concurrent-Error]:[Network-Interrupted]: Saved  Progress")
+							slog.Error("[Concurrent-Error]:[Network-Interrupted]: Saved  Progress")
 							// few thoughts : could have be the continue andallshit , but yeah we are under the another loop and we have only one was is to exit then close the resp streaming , then  yeah your thinking error and continue thing , that is nice , but we are already saved by the anmother timeout per goroutine client
 
 							// could be too harsh if i add the 'current' incrementor here
@@ -352,7 +352,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 					// destBuffer := d.cn.buffer[currentOffset:expectedLimit]
 					// n, err := io.ReadFull(resp.Body, destBuffer)
 					// if n < 0 || err != nil {
-					// 	log.Printf("[Concurrent-Error]: BOOOM!!, start %d: limit %d | Read-up ERR-> %v", start, limit, err)
+					// 	slog.Error("[Concurrent-Error]: BOOOM!!, start %d: limit %d | Read-up ERR-> %v", start, limit, err)
 					// 	current++
 					// 	resp.Body.Close()
 					// 	// time.Sleep(1 * time.Second) // could be network lag or something we get interr
@@ -378,13 +378,13 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	wg.Wait()
 
 	if !d.cn.passed {
-		log.Printf("[Concurrent-Error]: Concurrent Process Failed !!")
+		slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
 		return
 	}
 
 	// out, err := os.Create(d.Rs.FileLocation)
 	// if err != nil {
-	// 	log.Printf("[Concurrent-Downloader]: Error occurred <File creation>: %v", err)
+	// 	slog.Error("[Concurrent-Downloader]: Error occurred <File creation>: %v", err)
 	// }
 	//
 	// out.Write(d.cn.buffer)

@@ -2,7 +2,7 @@ package downloader
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -61,18 +61,18 @@ func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
 
 	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
 	if err != nil {
-		log.Printf("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : %v\n", err)
+		slog.Error("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : %v\n", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("[Downloader-Maximizer]: Network error")
+		slog.Error("[Downloader-Maximizer]: Network error")
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		log.Printf("[Concurrent-Error]:  %v , Code-> %d", err, resp.StatusCode)
+		slog.Error("[Concurrent-Error]:  %v , Code-> %d", err, resp.StatusCode)
 		return
 	}
 	req_head := ServerResponse(resp.Header)

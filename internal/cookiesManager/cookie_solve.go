@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 
 	_ "modernc.org/sqlite"
@@ -38,7 +38,7 @@ func CookieSolver() string {
 
 	home_dir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal("No HomeDir found!!", err)
+		slog.Error("No HomeDir found!!", err)
 	}
 
 	cookie_path := home_dir + "/.config/chromium/Default/Cookies"
@@ -47,13 +47,13 @@ func CookieSolver() string {
 	defer os.Remove(temp_file_path_info.Name())
 	defer temp_file_path_info.Close()
 	if err != nil {
-		log.Fatal("Creation of Temp Failed", err)
+		slog.Error("Creation of Temp Failed", err)
 		return ""
 	}
 
 	db, err := sql.Open("sqlite", temp_file_path_info.Name())
 	if err != nil {
-		log.Printf("Error Occurred %v", err)
+		slog.Error("Error Occurred %v", err)
 		return ""
 	}
 	defer db.Close()
@@ -65,7 +65,7 @@ func CookieSolver() string {
 
 	// rows, err := db.Query("SELECT name FROM sqlite_master ;")
 	// if err != nil {
-	// 	log.Fatal(err)
+	// 	slog.Error(err)
 	// }
 	// defer rows.Close()
 	//
@@ -73,7 +73,7 @@ func CookieSolver() string {
 	// for rows.Next() {
 	// 	var tableName string
 	// 	if err := rows.Scan(&tableName); err != nil {
-	// 		log.Fatal(err)
+	// 		slog.Error(err)
 	// 	}
 	// 	fmt.Printf("- %s\n", tableName)
 	// }
@@ -82,25 +82,25 @@ func CookieSolver() string {
 	rows, err := db.Query("Select encrypted_value from cookies where name = 'cf_clearance' and host_key = '.testfile.org' order by creation_utc desc limit 1;")
 
 	if err != nil {
-		log.Fatal("Query Failed over the cookie Table", err)
+		slog.Error("Query Failed over the cookie Table", err)
 	}
 	defer rows.Close()
 
 	var encrypted_value []byte
 	for rows.Next() {
 		if err := rows.Scan(&encrypted_value); err != nil {
-			log.Fatal("Unable to Scan the encrypted Value", err)
+			slog.Error("Unable to Scan the encrypted Value", err)
 		}
 		//fmt.Printf("- %s\n", row_)
 	}
-	// log.Printf("raw bytes length: %d", len(encrypted_value))
-	// log.Printf("first 6 bytes: %x", encrypted_value[:6])
-	// log.Printf("prefix string: %s", string(encrypted_value[:3]))
+	// slog.Error("raw bytes length: %d", len(encrypted_value))
+	// slog.Error("first 6 bytes: %x", encrypted_value[:6])
+	// slog.Error("prefix string: %s", string(encrypted_value[:3]))
 	//
 	key := DbusKeyGetter()
 	cookie, err := decryptCookie(encrypted_value, key)
 	if err != nil {
-		log.Println("Error In Decryption: ", err)
+		slog.Error("Error In Decryption: ", err)
 		return ""
 	}
 	return cookie
