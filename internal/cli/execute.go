@@ -3,9 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"github.com/VAibhav1031/tandem/internal/downloader"
+	"log/slog"
 	"os"
 	"os/signal"
+
+	"github.com/VAibhav1031/tandem/internal/downloader"
+	"golang.org/x/tools/go/analysis/passes/slog"
 )
 
 func Execute() {
@@ -25,8 +28,14 @@ func Execute() {
 
 	f := &Flags{}
 
-	// parser
-	f.Parser()
+	// parse
+	// we need the error to enforece it here nicely i think soo
+	err := f.Parser()
+
+	if err != nil {
+		slog.Error("Parsing Failed")
+		os.Exit(1)
+	}
 	// we have to check we can resume , if so then it is okay , if not then we have to start again
 	check := f.CheckResume()
 	req := downloader.NewServerLink(f.Url_link, 0, check.Fullpath, check.HashStateFile)
@@ -35,14 +44,8 @@ func Execute() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	// for the use case wher we have to use the resume STF data and pause details thing , just to make sure the this manage the pause and continyue thing
 	flowState := &downloader.StateFile{}
 	if check.Result == "resume" {
-		// recall the stored bytes , but how with the current details and start , but there is a thing  called server provide accept-range thing andall shit , in the download function if doesnt have then we have to update that shit and all thing on the terminal
-
-		// give to the maxim  and that will decide whether to see and move
-
-		// there is a state file  ,  there is a file path ,  means there is both ,  we have to continue , we have to  go with that thing
 
 		flowState.Resume_stf = check.StateFile
 		flowState.Stf = &downloader.State_File_Format{}

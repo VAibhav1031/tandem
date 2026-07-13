@@ -8,18 +8,13 @@ import (
 	"strconv"
 )
 
-func (f *Flags) Parser() {
+func (f *Flags) Parser() error {
 	args_length := len(os.Args)
 	args := os.Args[1:]
-	if args_length > 1 && args[0] == "--setup" {
-		slog.Info("Initial Setup Started")
-		RunSetup()
-		return
-	}
 
 	if args_length < 3 {
 
-		fmt.Println("Error : We need atleast 2 Argument :")
+		slog.Error("Error : We need atleast 2 Argument :")
 		Usage()
 		os.Exit(1)
 	}
@@ -29,8 +24,8 @@ func (f *Flags) Parser() {
 
 		case "-url", "-URL", "-u", "-U":
 			if i+1 >= args_length {
-				fmt.Println("Error there is no Link")
-				return
+				slog.Error("Error there is no Link")
+				return fmt.Errorf("No link")
 			}
 			link := args[i+1]
 			if !func() bool {
@@ -43,45 +38,48 @@ func (f *Flags) Parser() {
 				return linkRegex.MatchString(link)
 			}() {
 
-				fmt.Println("Error ")
+				slog.Error("Incorrect Link Format !!")
+				return fmt.Errorf("Incorrect Link Format")
 			}
 			f.Url_link = link
 
 		case "-concurrent", "-CONCURRENT", "-c", "-C":
 			if i+1 >= args_length {
-				fmt.Println("Error, there is no Concurrent Value provided")
+				slog.Error("Error, there is no Concurrent Value provided")
 				Usage()
-				return
+				return fmt.Errorf("No Concurrent Value")
 			}
 			conc_n, err := strconv.Atoi(args[i+1])
 			if err != nil {
-				fmt.Println("Error : It is not the integer", err)
-				return
+				slog.Error("Concurrent  is not the integer", err)
+				return fmt.Errorf("Conccurrent not integer")
 			}
 			if conc_n < 0 && conc_n > 9 {
-				fmt.Println("Error: Not a valid Concurrent Input!!")
+				slog.Error("Not a valid Concurrent Input!!")
 				Usage()
-				return
+				return fmt.Errorf("Not a Valid Input")
 			}
 
 			f.Concurrent_n = conc_n
 		case "-OUTPUT", "-output", "-o", "-O":
 			if i+1 >= args_length {
-				fmt.Println("Error: There is no Link")
+				slog.Error("There is no output Path")
 				Usage()
-				return
+				return fmt.Errorf("No output Path")
 			}
 			filePath := args[i+1]
 			if filePath == "" || filePath == "/" || filePath == "" {
-				fmt.Println("Error: Invalid or Prohibited FilePath")
+				slog.Error("Error: Invalid or Prohibited FilePath")
 				Usage()
-				return
+				return fmt.Errorf("Prohibited FilePath")
 			}
 			f.Filepath = filePath
 		default:
-			fmt.Printf("Unknown Flags!!, %v", args[i])
+			slog.Error("Unknown Flags!!, %v", args[i])
 			Usage()
 		}
 
 	}
+
+	return nil
 }
