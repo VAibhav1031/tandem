@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
@@ -10,6 +11,12 @@ import (
 func (f *Flags) Parser() {
 	args_length := len(os.Args)
 	args := os.Args[1:]
+	if args_length > 1 && args[0] == "--setup" {
+		slog.Info("Initial Setup Started")
+		RunSetup()
+		return
+	}
+
 	if args_length < 3 {
 
 		fmt.Println("Error : We need atleast 2 Argument :")

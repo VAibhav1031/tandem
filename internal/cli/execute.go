@@ -10,8 +10,8 @@ import (
 
 func Execute() {
 
-	fmt.Println("==========TANDEM DOWNLOADER===========")
 	Banner()
+	fmt.Println("==========TANDEM DOWNLOADER===========")
 	// var link string = "https://filesamples.com/samples/document/csv/sample4.csv"
 	// var link string = "https://pub-821312cfd07a4061bf7b99c1f23ed29b.r2.dev/3dicons-png-dynamic-1.0.0.zip"
 	// var link string = "https://ash-speed.hetzner.com/100MB.bin"
@@ -59,4 +59,3 @@ func Execute() {
 	// must use the "resume" "start" "no"  so we can go easily make it formal to the top somethinglike that would be better and nice to goo
 
 }
-

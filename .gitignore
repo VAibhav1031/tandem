@@ -8,3 +8,6 @@
 
 
 *.sum
+
+# object file
+tandem

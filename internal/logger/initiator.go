@@ -11,12 +11,15 @@ func LoggerInitiator() {
 	if err != nil {
 
 		slog.Error("Failed to open the log file", "error", err)
-		return
+		os.Exit(1)
+
 	}
 	logFilepath := homeDir + "/.local/tandem/logs/unilog.log"
 	file, err := os.OpenFile(logFilepath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		slog.Error("Failed to open the log file", "error", err)
+		os.Exit(1)
+
 	}
 
 	handler := slog.NewJSONHandler(file, &slog.HandlerOptions{
