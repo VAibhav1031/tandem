@@ -163,7 +163,7 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 
 		contentType = http.DetectContentType(preview)
 		contentType = strings.Split(contentType, ";")[0]
-		fmt.Println(contentType)
+		// fmt.Println(contentType)
 		filetype = mimeToExt[contentType]
 
 		// fmt.Println(filetype)
@@ -219,7 +219,7 @@ func (f *Flags) CheckResume() ResultFlow {
 
 		// not ver much good in the working of the os.Stat
 		file_stat, err := os.Stat(hash_file_path)
-		if err != nil {
+		if err == nil {
 			// file present
 			// we have to read adn then we have to
 			file_hash, err := os.OpenFile(hash_file_path, os.O_RDONLY, 0644)
@@ -252,13 +252,15 @@ func (f *Flags) CheckResume() ResultFlow {
 				result_flow.Fullpath = fullPath
 				result_flow.HashStateFile = hash_file_path
 				result_flow.StateFile = &json_dedact
+
+				slog.Info("Both Filepath and StateFile does Matched and exist also , Resume..")
 				return result_flow
 			}
 
 		} else if errors.Is(err, os.ErrNotExist) {
 			// not present
 			_, err := os.Stat(fullPath)
-			if err != nil {
+			if err == nil {
 				// filepath of same name file  exist but no state_file
 				increment++
 				splited_value := strings.Split(fullPath, "/")
@@ -272,9 +274,13 @@ func (f *Flags) CheckResume() ResultFlow {
 				result_flow.Result = CanStart
 				result_flow.Fullpath = fullPath
 				result_flow.HashStateFile = hash_file_path
+
+				slog.Info("No filePath exist!!, Fresh Start..")
 				return result_flow
 
 			}
+		} else {
+			slog.Error("Error in getting the stat of the Hash File")
 		}
 	}
 

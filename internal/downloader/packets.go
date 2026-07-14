@@ -197,16 +197,15 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	}
 
 	if !ct.isReady {
-		total_size, _ := strconv.Atoi(ct.headers.Content_length)
-		slog.Error("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
+		total_size, _ = strconv.Atoi(ct.headers.Content_length)
+		slog.Info("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
 
 		batch_size := int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problems
-		slog.Error("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
+		slog.Info("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
 		d.cn.buffer = make([]byte, total_size) // make changes to the buffer  with condition and open the last populated version
 		start, limit = int64(0), batch_size
 
 	}
-
 	_, err := os.Stat(d.Rs.FileLocation)
 	if err != nil { // && check for the fallocate cause err!= nill  means there i
 
@@ -225,15 +224,11 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 		err = syscall.Fallocate(fd, 0, 0, size)
 		if err != nil {
-			fmt.Printf("Fallocate failed: %v\n", err)
+			slog.Error("Fallocate failed: %v\n", err)
 			return
 		}
 	}
 
-	if ct.isReady {
-
-		// we have to populate the  buffer so we can use that thing nothing else
-	}
 	// pre passed thing
 	d.cn.passed = true
 
@@ -249,7 +244,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 			start, limit = r_det.CurrentOffsets, r_det.ExpectedLimit
 
 		}
-		slog.Error("GOROUTINE %d-->Start: %d, limit: %d", i, start, limit)
+		slog.Info("GOROUTINE %d-->Start: %d, limit: %d", i, start, limit)
 
 		wg.Add(1)
 		go func(chunkStart int64, chunkLimit int64) {
@@ -368,11 +363,13 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 			start = limit
 			limit = start + batch_size
 
+			fmt.Println(total_size)
 			if limit%int64(total_size) != limit {
 				limit = limit - (limit % int64(total_size))
 			}
 		}
 		// we need to wait till all the goroutines are complete  then proceed with lower ,  if done then based on the passed bool value we proceed like if it went well or not if not then we will just skip that and all shit
+		slog.Info("All goroutine are fired!!")
 	}
 
 	wg.Wait()

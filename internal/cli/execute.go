@@ -8,7 +8,6 @@ import (
 	"os/signal"
 
 	"github.com/VAibhav1031/tandem/internal/downloader"
-	"golang.org/x/tools/go/analysis/passes/slog"
 )
 
 func Execute() {
@@ -31,11 +30,11 @@ func Execute() {
 	// parse
 	// we need the error to enforece it here nicely i think soo
 	err := f.Parser()
-
 	if err != nil {
 		slog.Error("Parsing Failed")
 		os.Exit(1)
 	}
+
 	// we have to check we can resume , if so then it is okay , if not then we have to start again
 	check := f.CheckResume()
 	req := downloader.NewServerLink(f.Url_link, 0, check.Fullpath, check.HashStateFile)
@@ -52,6 +51,7 @@ func Execute() {
 		dow.Maxim(ctx, flowState)
 
 	} else if check.Result == "fresh" {
+		flowState.Resume_stf = &downloader.State_File_Format{}
 		flowState.Stf = &downloader.State_File_Format{}
 		dow.Maxim(ctx, flowState)
 	} else {

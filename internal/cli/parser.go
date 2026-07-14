@@ -18,10 +18,9 @@ func (f *Flags) Parser() error {
 		Usage()
 		os.Exit(1)
 	}
-	for i := 0; i < args_length; i++ {
+	for i := 0; i < args_length-1; i++ {
 
 		switch args[i] {
-
 		case "-url", "-URL", "-u", "-U":
 			if i+1 >= args_length {
 				slog.Error("Error there is no Link")
@@ -29,7 +28,7 @@ func (f *Flags) Parser() error {
 			}
 			link := args[i+1]
 			if !func() bool {
-				linkRegex, err := regexp.Compile(`^http?://[^\s$.?#].[^\s]*$`)
+				linkRegex, err := regexp.Compile(`^https?://[^\s$.?#].[^\s]*$`)
 				if err != nil {
 					return false
 					//log
