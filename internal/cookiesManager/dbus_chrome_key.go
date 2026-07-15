@@ -81,7 +81,7 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	err = service.Call("org.freedesktop.Secret.Service.GetSecrets", 0, items, sessionPath).
 		Store(&secrets)
 	if err != nil {
-		slog.Error("[gnomeKey] : GetSecrets failed = '%v', fallback()..", err)
+		slog.Error("[gnomeKey] : GetSecrets failed = ", err, "fallback()..")
 		return fallback()
 	}
 

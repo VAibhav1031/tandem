@@ -35,7 +35,6 @@ type Responseheaders struct {
 	Content_type       string
 	Content_deposition string
 	Accept_ranges      string
-	// headers            http.Header
 }
 
 var mimeToExt = map[string]string{
@@ -93,10 +92,8 @@ func (r *Responseheaders) getFileInfo(url string) (string, string) {
 	}
 
 	if r.Content_type != "" {
-		// file_type := strings.Split(r.content_type, "/")[1]
 		file_type := mimeToExt[r.Content_type]
 
-		fmt.Println(r.Content_type)
 		return "", file_type
 	}
 
@@ -134,7 +131,7 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 	}
 
 	buffer_read := make([]byte, buffer_length) //buffer_lenght --> 32kb length
-	contentLength := resp.ContentLength        // This is an int64
+	// contentLength := resp.ContentLength        // This is an int64
 	var downloaded int64 = 0
 
 	// if preview != nil {
@@ -152,10 +149,10 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 			// Update the counter
 			downloaded += int64(n)
 
-			if contentLength > 0 {
-				percent := (float64(downloaded) / float64(contentLength)) * 100
-				fmt.Printf("\rProgress: %.2f%% \n", percent)
-			}
+			// if contentLength > 0 {
+			// 	percent := (float64(downloaded) / float64(contentLength)) * 100
+			// 	// fmt.Printf("\rProgress: %.2f%% \n", percent)
+			// }
 		}
 
 		if err == io.EOF {
@@ -164,6 +161,8 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 	}
 }
 
+/* ***Concurrent Download Section***  */
+
 type conCurrentDet struct {
 	n      int
 	buffer []byte
@@ -171,19 +170,10 @@ type conCurrentDet struct {
 	mw     sync.Mutex
 }
 
-// current situation we facing is we need to know the total  size of the thing , without that we are unable to initate the concurrent download thing , Response Header is kind of the solution to this i would says oo , to get the total  byte thing i would say soo , currently we are not thinking about the  pre download part here , link would be directly okay
-
-// each go-routine will have the  retyr logic with limit , like if the request fail , and if the copy fails something ... like that we have to have something so that we can have great sucess or increase sucess rate ..
-
-// there should be loop if thinsg is done in go then loop would break , else increas but the counter will also increase and with reached limit it will break and with check of counter value eq tro the the total limit will return the error andallshit
-
-// mostly it would something like  http request and the copy  there is some problem to occur
 const globalTryLimit int = 4
 
 func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
-	// we have to check whether the
-	// if we have the resume thing then we have to go with edifferent start and end
 	var start int64
 	var limit int64
 	var total_size int
@@ -200,14 +190,15 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 		total_size, _ = strconv.Atoi(ct.headers.Content_length)
 		slog.Info("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
 
-		batch_size := int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problems
-		slog.Info("floated value : %v", math.Ceil(float64(total_size)/float64(d.cn.n)))
+		batch_size = int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problemos
+
+		slog.Info("floated value : ", math.Ceil(float64(total_size)/float64(d.cn.n)))
 		d.cn.buffer = make([]byte, total_size) // make changes to the buffer  with condition and open the last populated version
 		start, limit = int64(0), batch_size
 
 	}
 	_, err := os.Stat(d.Rs.FileLocation)
-	if err != nil { // && check for the fallocate cause err!= nill  means there i
+	if err == nil { // && check for the fallocate cause err!= nill  means there i
 
 		// file already exist no problem , if that exist and thenm we havce to populate , buyt that thing is nto required noq mann , we know that and we will use the offset adn all shit  to write the thing nothing else  is needed now
 
@@ -224,7 +215,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 		err = syscall.Fallocate(fd, 0, 0, size)
 		if err != nil {
-			slog.Error("Fallocate failed: %v\n", err)
+			slog.Error("Fallocate failed: ", err)
 			return
 		}
 	}
@@ -234,17 +225,13 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 	wg := &sync.WaitGroup{}
 	for i := 0; i < d.cn.n; i++ {
-		// current outer variables limit, start, is the passed one , the outer is the globalLimit one
-		// this need to be universal means  just the start and limit
-		// what condition needed to go
-		// my idea just smpple check here  and we will just use the array of those start and end
 
 		if ct.isReady {
 			r_det := ct.stf.LastRanges[i]
 			start, limit = r_det.CurrentOffsets, r_det.ExpectedLimit
 
 		}
-		slog.Info("GOROUTINE %d-->Start: %d, limit: %d", i, start, limit)
+		slog.Info("GOROUTINE :", i, " -->Start:", start, "limit-->", limit)
 
 		wg.Add(1)
 		go func(chunkStart int64, chunkLimit int64) {
@@ -259,11 +246,9 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 				case <-ct.ctx.Done():
 
-					// here you have to give the current offset to the
-
 					ct.stf.LastRanges = append(ct.stf.LastRanges, ranges{CurrentOffsets: currentOffset, ExpectedLimit: expectedLimit})
-					// ct.stf.Filepath = d.Rs.FileLocation ///
 					return
+
 				default:
 					remainingBytes := expectedLimit - currentOffset
 					if remainingBytes < 0 {
@@ -282,19 +267,18 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 					if err != nil {
 						slog.Error("[Concurrent-ERROR]: ", err)
 					}
+
 					req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", currentOffset, expectedLimit-1))
 					resp, err := ct.client.Do(req)
 					if err != nil {
-						slog.Error("[Concurrent-Error]: Connection Failed %v, ", err)
-						// exit the goroutine thing...:_)
+						slog.Error("[Concurrent-Error]: Connection Failed ", err)
 						current++
-						// resp.Body.Close()
 						time.Sleep(1 * time.Second)
 						continue
 					}
-
+					// fmt.Println("The goroutine", i, "Current Start", currentOffset, "Limit", expectedLimit)
 					if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-						slog.Error("[Concurrent-Error]: Unexpected status code : %d", resp.StatusCode)
+						slog.Error("[Concurrent-Error]: Unexpected status code :", resp.StatusCode)
 						resp.Body.Close()
 						current++
 						continue
@@ -307,17 +291,13 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 					for {
 						nr, readErr := resp.Body.Read(bufferBlock)
 						if nr > 0 {
-							//  here we will be using the writeAt thing with the offset provided
 							_, err := file.WriteAt(bufferBlock, currentOffset)
 
 							if err != nil {
 								d.cn.passed = false
-								slog.Error("[Concurrent-Error]: WriteAt Error %v", err)
+								slog.Error("[Concurrent-Error]: WriteAt Error ", err)
 								return
 							}
-							// we have the read  body which is like block read thing  which we dont need to have the probelm and now we have use that to write the  thing , cause the WriteAt usually take the buffer byte and currentOFfset from where we have to write andall shit nothing else
-
-							// now the thing is how to update teh currentOffset it should be based on the the number of byte it has written
 
 							// copy(d.cn.buffer[currentOffset:currentOffset+int64(nr)], bufferBlock)
 							currentOffset += int64(nr)
@@ -328,8 +308,6 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 								break // Read Completely successfully
 							}
 							slog.Error("[Concurrent-Error]:[Network-Interrupted]: Saved  Progress")
-							// few thoughts : could have be the continue andallshit , but yeah we are under the another loop and we have only one was is to exit then close the resp streaming , then  yeah your thinking error and continue thing , that is nice , but we are already saved by the anmother timeout per goroutine client
-
 							// could be too harsh if i add the 'current' incrementor here
 							current++
 							break
@@ -360,15 +338,14 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 		}(start, limit)
 		if !ct.isReady {
+
 			start = limit
 			limit = start + batch_size
 
-			fmt.Println(total_size)
 			if limit%int64(total_size) != limit {
 				limit = limit - (limit % int64(total_size))
 			}
 		}
-		// we need to wait till all the goroutines are complete  then proceed with lower ,  if done then based on the passed bool value we proceed like if it went well or not if not then we will just skip that and all shit
 		slog.Info("All goroutine are fired!!")
 	}
 
@@ -378,12 +355,5 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 		slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
 		return
 	}
-
-	// out, err := os.Create(d.Rs.FileLocation)
-	// if err != nil {
-	// 	slog.Error("[Concurrent-Downloader]: Error occurred <File creation>: %v", err)
-	// }
-	//
-	// out.Write(d.cn.buffer)
 
 }

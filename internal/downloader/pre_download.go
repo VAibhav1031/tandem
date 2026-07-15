@@ -97,7 +97,7 @@ func (t *LocalCookieTransport) RoundTrip(req *http.Request) (*http.Response, err
 		}
 	} else {
 		req.Header.Del("Cookie")
-		slog.Info("[Tier 2] Cross-domain Jump: %s -> %s. Cookies Stripped", t.HomeDomain, currentBase)
+		slog.Info("[Tier 2] Cross-domain Jump: ", t.HomeDomain, "->", currentBase, ". Cookies Stripped")
 	}
 	return t.Next.RoundTrip(req)
 }
@@ -115,7 +115,7 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 		tcpConn.Close()
 		return nil, fmt.Errorf("split host/port: %w", err)
 	}
-	slog.Info("[Tier1]-[spook_TLS]: HOST %v", host)
+	slog.Info("[Tier1]-[spook_TLS]: HOST ", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName:         host,
@@ -261,7 +261,7 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		tcpConn.Close()
 		return nil, fmt.Errorf("split host/port: %w", err)
 	}
-	slog.Info("[Tier1]-[spook_TLS]: HOST %v", host)
+	slog.Info("[Tier1]-[spook_TLS]: HOST ", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName:         host,

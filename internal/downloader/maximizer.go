@@ -61,7 +61,7 @@ func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
 
 	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
 	if err != nil {
-		slog.Error("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : %v\n", err)
+		slog.Error("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : ", err)
 	}
 
 	resp, err := client.Do(req)
@@ -72,7 +72,7 @@ func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		slog.Error("[Concurrent-Error]:  %v , Code-> %d", err, resp.StatusCode)
+		slog.Error("[Concurrent-Error]: ", err, " Code-> ", resp.StatusCode)
 		return
 	}
 	req_head := ServerResponse(resp.Header)

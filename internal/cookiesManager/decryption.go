@@ -4,8 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
-	// "fmt"
-	"log"
+	"log/slog"
 )
 
 func decryptCookie(encrypted []byte, key []byte) (string, error) {
@@ -27,7 +26,7 @@ func decryptCookie(encrypted []byte, key []byte) (string, error) {
 	// create AES block cipher with our derived key
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		log.Println("[Decryption] : Failed in creation of the AES block")
+		slog.Error("[Decryption] : Failed in creation of the AES block")
 		return "", err
 	}
 
@@ -36,7 +35,7 @@ func decryptCookie(encrypted []byte, key []byte) (string, error) {
 
 	// CBC requires data length to be multiple of block size (16)
 	if len(encrypted)%aes.BlockSize != 0 {
-		log.Println("[Decryption] : encrypted data is not block aligned")
+		slog.Error("[Decryption] : encrypted data is not block aligned")
 		return "", errors.New("encrypted data is not block aligned")
 	}
 

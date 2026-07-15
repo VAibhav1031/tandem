@@ -110,7 +110,7 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 		// file_type := strings.Split(r.content_type, "/")[1]
 		file_type := mimeToExt[r.headers.Content_type]
 
-		fmt.Println(r.headers.Content_type)
+		// fmt.Println(r.headers.Content_type)
 		return "", file_type
 	}
 
@@ -136,7 +136,7 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	var chain http.RoundTripper = ht
 	chain = &downloader.UTLSTransport{Next: ht}
 
-	client := &http.Client{Transport: chain, Timeout: 10 * time.Second}
+	client := &http.Client{Transport: chain, Timeout: 60 * time.Second}
 	req, err := http.NewRequest("GET", f.Url_link, nil)
 	if err != nil {
 

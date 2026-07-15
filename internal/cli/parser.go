@@ -19,7 +19,6 @@ func (f *Flags) Parser() error {
 		os.Exit(1)
 	}
 	for i := 0; i < args_length-1; i++ {
-
 		switch args[i] {
 		case "-url", "-URL", "-u", "-U":
 			if i+1 >= args_length {
@@ -41,6 +40,7 @@ func (f *Flags) Parser() error {
 				return fmt.Errorf("Incorrect Link Format")
 			}
 			f.Url_link = link
+			i++
 
 		case "-concurrent", "-CONCURRENT", "-c", "-C":
 			if i+1 >= args_length {
@@ -60,6 +60,7 @@ func (f *Flags) Parser() error {
 			}
 
 			f.Concurrent_n = conc_n
+			i++
 		case "-OUTPUT", "-output", "-o", "-O":
 			if i+1 >= args_length {
 				slog.Error("There is no output Path")
@@ -73,8 +74,9 @@ func (f *Flags) Parser() error {
 				return fmt.Errorf("Prohibited FilePath")
 			}
 			f.Filepath = filePath
+			i++
 		default:
-			slog.Error("Unknown Flags!!, %v", args[i])
+			slog.Error("Unknown Flags!! ", args[i])
 			Usage()
 		}
 
