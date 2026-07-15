@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -56,9 +57,29 @@ func Execute() {
 		dow.Maxim(ctx, flowState)
 	} else {
 
-		fmt.Println("ERROR NOTHING<'-'>")
+		slog.Error("ERROR NOTHING<'-'>")
+		return
 	}
 
+	if ctx.Err() == context.Canceled {
+		// we  have to save the state file
+		// open the file
+
+		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY, 0644)
+
+		if err != nil {
+			slog.Error("Unable to open the file")
+		}
+		json_format, err := json.Marshal(flowState.Stf)
+		if err != nil {
+			slog.Error("JSON Marshal Failed")
+			return
+		}
+		// statefile.Write([]byte(json_format))
+
+		statefile.Write(json_format)
+		return
+	}
 	// must use the "resume" "start" "no"  so we can go easily make it formal to the top somethinglike that would be better and nice to goo
 
 }

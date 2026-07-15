@@ -264,7 +264,7 @@ func (f *Flags) CheckResume() ResultFlow {
 				// filepath of same name file  exist but no state_file
 				increment++
 				splited_value := strings.Split(fullPath, "/")
-				fullPath = splited_value[len(splited_value)] + fmt.Sprint("download_file(%d)", increment)
+				fullPath = splited_value[len(splited_value)-1] + fmt.Sprint("download_file(%d)", increment)
 				continue // check again for this filepath
 
 			} else if errors.Is(err, os.ErrNotExist) {

@@ -247,6 +247,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 				case <-ct.ctx.Done():
 
 					ct.stf.LastRanges = append(ct.stf.LastRanges, ranges{CurrentOffsets: currentOffset, ExpectedLimit: expectedLimit})
+					slog.Info("Cancel Sucessfully Done!!")
 					return
 
 				default:
