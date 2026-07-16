@@ -243,7 +243,8 @@ func (f *Flags) CheckResume() ResultFlow {
 				// no it is nto se // means the hash opened here is of the duplicate path of the download  we need to  increment that
 				increment++
 				splited_value := strings.Split(fullPath, "/")
-				fullPath = splited_value[len(splited_value)] + fmt.Sprint("download_file(%d)", increment)
+				length_string := len(splited_value[len(splited_value)-1])
+				fullPath = fullPath[:length_string] + fmt.Sprintf("download_file(%d)", increment)
 				continue // check again for this filepath
 
 			} else {
@@ -264,7 +265,8 @@ func (f *Flags) CheckResume() ResultFlow {
 				// filepath of same name file  exist but no state_file
 				increment++
 				splited_value := strings.Split(fullPath, "/")
-				fullPath = splited_value[len(splited_value)-1] + fmt.Sprint("download_file(%d)", increment)
+				length_string := len(splited_value[len(splited_value)-1])
+				fullPath = fullPath[:length_string] + fmt.Sprintf("download_file(%d)", increment)
 				continue // check again for this filepath
 
 			} else if errors.Is(err, os.ErrNotExist) {

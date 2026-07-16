@@ -245,8 +245,10 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 				select {
 
 				case <-ct.ctx.Done():
-
+					d.cn.mw.Lock()
+					ct.stf.G_ID = i
 					ct.stf.LastRanges = append(ct.stf.LastRanges, ranges{CurrentOffsets: currentOffset, ExpectedLimit: expectedLimit})
+					d.cn.mw.Unlock()
 					slog.Info("Cancel Sucessfully Done!!")
 					return
 
@@ -264,7 +266,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 						return
 					}
 
-					req, err := http.NewRequest("GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
+					req, err := http.NewRequestWithContext(ct.ctx, "GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
 					if err != nil {
 						slog.Error("[Concurrent-ERROR]: ", err)
 					}

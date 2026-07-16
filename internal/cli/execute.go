@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sort"
 
 	"github.com/VAibhav1031/tandem/internal/downloader"
 )
@@ -45,6 +46,7 @@ func Execute() {
 	defer stop()
 
 	flowState := &downloader.StateFile{}
+	fmt.Println(flowState.Stf)
 	if check.Result == "resume" {
 
 		flowState.Resume_stf = check.StateFile
@@ -70,12 +72,13 @@ func Execute() {
 		if err != nil {
 			slog.Error("Unable to open the file")
 		}
+
+		// sorted_FlowState = sort.
 		json_format, err := json.Marshal(flowState.Stf)
 		if err != nil {
-			slog.Error("JSON Marshal Failed")
+			slog.Error("JSON Marshalling Failed!!")
 			return
 		}
-		// statefile.Write([]byte(json_format))
 
 		statefile.Write(json_format)
 		return

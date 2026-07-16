@@ -27,6 +27,7 @@ type ranges struct {
 	ExpectedLimit  int64 `json:"expectedLimit"`
 }
 type State_File_Format struct {
+	G_ID       int
 	Url        string   `json:"url"`
 	LastRanges []ranges `json:"lastRanges"`
 	Filepath   string   `json:"filepath"`
@@ -59,7 +60,7 @@ func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
 	// chain = &SolverTransport{Next: chain}
 	client := &http.Client{Transport: chain, Timeout: 10 * time.Minute}
 
-	req, err := http.NewRequest("HEAD", d.Rs.Link, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", d.Rs.Link, nil)
 	if err != nil {
 		slog.Error("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : ", err)
 	}
