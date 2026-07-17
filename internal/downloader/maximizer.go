@@ -2,8 +2,11 @@ package downloader
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -22,14 +25,14 @@ func (r *Responseheaders) ConcurrentCheck() bool {
 // state file json format
 // {url:<link>,currentOffset:..,expectedLimit:..,filename:for_which_file}
 
-type ranges struct {
+type Ranges struct {
 	CurrentOffsets int64 `json:"currentOffset"`
 	ExpectedLimit  int64 `json:"expectedLimit"`
 }
 type State_File_Format struct {
 	G_ID       int
 	Url        string   `json:"url"`
-	LastRanges []ranges `json:"lastRanges"`
+	LastRanges []Ranges `json:"lastRanges"`
 	Filepath   string   `json:"filepath"`
 }
 
@@ -38,8 +41,8 @@ type concurrentFlow struct {
 	ctx       context.Context
 	client    http.Client
 	headers   *Responseheaders
-	resumeStf State_File_Format
-	stf       State_File_Format
+	resumeStf *State_File_Format
+	stf       *State_File_Format
 	isReady   bool
 }
 
@@ -50,7 +53,7 @@ type StateFile struct {
 
 // Current Requirement for this to work nicely and do the task eassily for us
 // Managing the incoming request and based on that  pass the request based on the availability of concurrent approach and all shit
-func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
+func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 	ht := NewDualTransport()
 	var chain http.RoundTripper = ht
@@ -78,22 +81,50 @@ func (d *DownloadInfo) Maxim(ctx context.Context, f_stf *StateFile) {
 	}
 	req_head := ServerResponse(resp.Header)
 	// we need to pass the  variable  somewhere to there so that it happen here easily without  unecessary problem in
-
 	if req_head.ConcurrentCheck() {
 		// req_head is good for getting the concurrent_check
 		// we need to check the stf is populated or not , if it is tghen  we ould go  and tghen there is one more thing
 		// if stf.
+
 		var conFlow concurrentFlow
 		if f_stf.Resume_stf.Url == "" {
+			totalSize, _ := strconv.Atoi(req_head.Content_length)
+			slog.Info("totalSize of the file", totalSize, "and in the gb", (float64(totalSize) / float64(1024*1024*1024)))
+
+			batchSize := int64(math.Ceil(float64(totalSize) / float64(d.Rs.Con_n)))
+			slog.Info("floated value : ", math.Ceil(float64(totalSize)/float64(d.Rs.Con_n)))
+			start, limit := int64(0), batchSize
+
+			for i := 0; i < int(d.Rs.Con_n); i++ {
+				// start = int64(i) * batchSize
+				// limit = start + batchSize
+				//
+				// // Ensure the last worker handles any remaining remainder bytes
+				// if i == int(d.Rs.Con_n)-1 {
+				// 	limit = int64(totalSize)
+				// }
+				start = limit
+				limit = start + batchSize
+
+				if limit%int64(totalSize) != limit {
+					limit = limit - (limit % int64(totalSize))
+				}
+				f_stf.Stf.LastRanges[i] = Ranges{
+					CurrentOffsets: start,
+					ExpectedLimit:  limit,
+				}
+			}
+			fmt.Println(f_stf.Stf.LastRanges)
 
 			conFlow.client = *client
+			conFlow.stf = f_stf.Stf
 			conFlow.headers = req_head
 			conFlow.ctx = ctx
 		} else {
 			conFlow.client = *client
 			// give both for the usecase normal one and other
-			conFlow.resumeStf = *f_stf.Resume_stf
-			conFlow.stf = *f_stf.Stf
+			conFlow.resumeStf = f_stf.Resume_stf
+			conFlow.stf = f_stf.Stf
 			conFlow.ctx = ctx
 			conFlow.isReady = true
 		}

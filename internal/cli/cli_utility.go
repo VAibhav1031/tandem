@@ -2,6 +2,7 @@ package cli
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/VAibhav1031/tandem/internal/downloader"
 	"log/slog"
+
+	"github.com/VAibhav1031/tandem/internal/downloader"
 )
 
 func Banner() {
@@ -201,8 +203,6 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	return filename, filetype, fullpath
 }
 
-// we have to return that we have state file and all shit lets go for the download resume
-// else start fresh just that nothing else
 func (f *Flags) CheckResume() ResultFlow {
 	// check for the flag filepath (included with filename at the end)
 	var result_flow ResultFlow
@@ -212,7 +212,7 @@ func (f *Flags) CheckResume() ResultFlow {
 
 	}
 	hash := sha256.Sum256([]byte(fullPath))
-	hash_file_path := state_file_path + string(hash[:]) + ".json"
+	hash_file_path := state_file_path + hex.EncodeToString(hash[:]) + ".json"
 
 	increment := 0
 	for {
@@ -243,8 +243,9 @@ func (f *Flags) CheckResume() ResultFlow {
 				// no it is nto se // means the hash opened here is of the duplicate path of the download  we need to  increment that
 				increment++
 				splited_value := strings.Split(fullPath, "/")
+				type_extract := strings.Split(splited_value[len(splited_value)-1], ".")[0]
 				length_string := len(splited_value[len(splited_value)-1])
-				fullPath = fullPath[:length_string] + fmt.Sprintf("download_file(%d)", increment)
+				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)"+type_extract, increment)
 				continue // check again for this filepath
 
 			} else {
@@ -265,8 +266,9 @@ func (f *Flags) CheckResume() ResultFlow {
 				// filepath of same name file  exist but no state_file
 				increment++
 				splited_value := strings.Split(fullPath, "/")
+				type_extract := strings.Split(splited_value[len(splited_value)-1], ".")[0]
 				length_string := len(splited_value[len(splited_value)-1])
-				fullPath = fullPath[:length_string] + fmt.Sprintf("download_file(%d)", increment)
+				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)"+type_extract, increment)
 				continue // check again for this filepath
 
 			} else if errors.Is(err, os.ErrNotExist) {

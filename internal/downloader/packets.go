@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -164,10 +163,10 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 /* ***Concurrent Download Section***  */
 
 type conCurrentDet struct {
-	n      int
-	buffer []byte
-	passed bool
-	mw     sync.Mutex
+	n           int
+	bufferBlock [32 * 1024]byte
+	passed      bool
+	mw          sync.Mutex
 }
 
 const globalTryLimit int = 4
@@ -176,8 +175,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 	var start int64
 	var limit int64
-	var total_size int
-	var batch_size int64
+
 	var fd int
 	var file *os.File
 
@@ -186,17 +184,6 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 		d.cn.n = 4
 	}
 
-	if !ct.isReady {
-		total_size, _ = strconv.Atoi(ct.headers.Content_length)
-		slog.Info("total_size of the file", total_size, "and in the gb", (float64(total_size) / float64(1024*1024*1024)))
-
-		batch_size = int64(math.Ceil(float64(total_size) / float64(d.cn.n))) // size need to be clearl y round so that slicing doesnt give problemos
-
-		slog.Info("floated value : ", math.Ceil(float64(total_size)/float64(d.cn.n)))
-		d.cn.buffer = make([]byte, total_size) // make changes to the buffer  with condition and open the last populated version
-		start, limit = int64(0), batch_size
-
-	}
 	_, err := os.Stat(d.Rs.FileLocation)
 	if err == nil { // && check for the fallocate cause err!= nill  means there i
 
@@ -226,29 +213,28 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	wg := &sync.WaitGroup{}
 	for i := 0; i < d.cn.n; i++ {
 
-		if ct.isReady {
-			r_det := ct.stf.LastRanges[i]
-			start, limit = r_det.CurrentOffsets, r_det.ExpectedLimit
-
-		}
 		slog.Info("GOROUTINE :", i, " -->Start:", start, "limit-->", limit)
 
 		wg.Add(1)
-		go func(chunkStart int64, chunkLimit int64) {
+		go func(Part_ID int) {
 			defer wg.Done()
 
-			var currentOffset = chunkStart
-			expectedLimit := chunkLimit
+			if ct.isReady {
+				r_det := ct.resumeStf.LastRanges[Part_ID]
+				start, limit = r_det.CurrentOffsets, r_det.ExpectedLimit
+			} else {
+				det := ct.stf.LastRanges[Part_ID]
+				start, limit = det.CurrentOffsets, det.ExpectedLimit
+			}
+			var currentOffset = start
+			expectedLimit := limit
 
 			current := 0
 			for {
 				select {
 
 				case <-ct.ctx.Done():
-					d.cn.mw.Lock()
-					ct.stf.G_ID = i
-					ct.stf.LastRanges = append(ct.stf.LastRanges, ranges{CurrentOffsets: currentOffset, ExpectedLimit: expectedLimit})
-					d.cn.mw.Unlock()
+					atomic.StoreInt64(&ct.stf.LastRanges[Part_ID].CurrentOffsets, currentOffset)
 					slog.Info("Cancel Sucessfully Done!!")
 					return
 
@@ -290,11 +276,11 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 					// Since each slice of the buffere is not overlapping , so  there is no need to put the lock over the buffer and we cango easily and it is the design which help it move
 
 					// going for the block read , cause io.ReadFull() all or nothing , here we have to go in progressive way where if any error ocurr we can  store the till the read offset byte , not losing whole and retrying again
-					bufferBlock := make([]byte, 32*1024)
+
 					for {
-						nr, readErr := resp.Body.Read(bufferBlock)
+						nr, readErr := resp.Body.Read(d.cn.bufferBlock[:])
 						if nr > 0 {
-							_, err := file.WriteAt(bufferBlock, currentOffset)
+							_, err := file.WriteAt(d.cn.bufferBlock[:], currentOffset)
 
 							if err != nil {
 								d.cn.passed = false
@@ -339,16 +325,8 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 				}
 			}
 
-		}(start, limit)
-		if !ct.isReady {
+		}(i)
 
-			start = limit
-			limit = start + batch_size
-
-			if limit%int64(total_size) != limit {
-				limit = limit - (limit % int64(total_size))
-			}
-		}
 		slog.Info("All goroutine are fired!!")
 	}
 
