@@ -2,7 +2,6 @@ package downloader
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -114,7 +113,6 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 					ExpectedLimit:  limit,
 				}
 			}
-			fmt.Println(f_stf.Stf.LastRanges)
 
 			conFlow.client = *client
 			conFlow.stf = f_stf.Stf

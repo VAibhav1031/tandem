@@ -187,6 +187,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	_, err := os.Stat(d.Rs.FileLocation)
 	if err == nil { // && check for the fallocate cause err!= nill  means there i
 
+		file, err = os.OpenFile(d.Rs.FileLocation, os.O_RDWR|os.O_CREATE, 0666)
 		// file already exist no problem , if that exist and thenm we havce to populate , buyt that thing is nto required noq mann , we know that and we will use the offset adn all shit  to write the thing nothing else  is needed now
 
 	} else if errors.Is(err, os.ErrNotExist) {
@@ -213,8 +214,6 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	wg := &sync.WaitGroup{}
 	for i := 0; i < d.cn.n; i++ {
 
-		slog.Info("GOROUTINE :", i, " -->Start:", start, "limit-->", limit)
-
 		wg.Add(1)
 		go func(Part_ID int) {
 			defer wg.Done()
@@ -226,6 +225,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 				det := ct.stf.LastRanges[Part_ID]
 				start, limit = det.CurrentOffsets, det.ExpectedLimit
 			}
+			slog.Info("GOROUTINE :", i, " -->Start:", start, "limit-->", limit)
 			var currentOffset = start
 			expectedLimit := limit
 
@@ -236,7 +236,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 				case <-ct.ctx.Done():
 
 					atomic.StoreInt64(&ct.stf.LastRanges[Part_ID].CurrentOffsets, currentOffset)
-					slog.Info("Cancel Sucessfully Done!!")
+					slog.Info("[Concurrent]:Cancel Sucessfully Done!!")
 					return
 
 				default:
@@ -249,7 +249,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 						d.cn.mw.Lock()
 						d.cn.passed = false
 						d.cn.mw.Unlock()
-						slog.Error("All Limit Crossed!! Exitting Goroutine..")
+						slog.Error("[Concurrent-ERROR]:All Limit Crossed!! Exitting Goroutine..")
 						return
 					}
 
@@ -266,7 +266,6 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 						time.Sleep(1 * time.Second)
 						continue
 					}
-					// fmt.Println("The goroutine", i, "Current Start", currentOffset, "Limit", expectedLimit)
 					if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
 						slog.Error("[Concurrent-Error]: Unexpected status code :", resp.StatusCode)
 						resp.Body.Close()
@@ -309,7 +308,6 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 					if currentOffset >= expectedLimit {
 						break
-						// read whole segment not needed anymore
 					}
 					// // read to the correct section of the buffer
 					// destBuffer := d.cn.buffer[currentOffset:expectedLimit]
@@ -328,7 +326,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 		}(i)
 
-		slog.Info("All goroutine are fired!!")
+		slog.Info("[Concurrent]:All goroutine are fired!!")
 	}
 
 	wg.Wait()
@@ -336,6 +334,8 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	if !d.cn.passed {
 		slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
 		return
+	} else {
+		fmt.Println("SUCESSFULLY DONE :)")
 	}
 
 }
