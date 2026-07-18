@@ -28,7 +28,7 @@ func Execute() {
 	// we need the error to enforece it here nicely i think soo
 	err := f.Parser()
 	if err != nil {
-		slog.Error("Parsing Failed")
+		slog.Error("[CLI::EXECUTE]:Parsing Failed")
 		os.Exit(1)
 	}
 
@@ -39,7 +39,7 @@ func Execute() {
 
 	concurrencyLimit := f.Concurrent_n
 	if concurrencyLimit <= 0 {
-		slog.Info("No concurrency count provided. Falling back to default.", "workers", DefaultConcurrency)
+		slog.Info("[CLI::EXECUTE]: No concurrency count provided. Falling back to default.", "workers", DefaultConcurrency)
 		concurrencyLimit = DefaultConcurrency
 
 	}
@@ -55,6 +55,7 @@ func Execute() {
 
 		flowState.Resume_stf = check.StateFile
 		flowState.Stf = &downloader.State_File_Format{
+			Con:        check.StateFile.Con, // we need to use last state number of con
 			Url:        f.Url_link,
 			Filepath:   f.Filepath,
 			LastRanges: make([]downloader.Ranges, concurrencyLimit)}
@@ -63,6 +64,7 @@ func Execute() {
 	} else if check.Result == "fresh" {
 		flowState.Resume_stf = &downloader.State_File_Format{}
 		flowState.Stf = &downloader.State_File_Format{
+			Con:        dow.Rs.Con_n,
 			Url:        f.Url_link,
 			Filepath:   f.Filepath,
 			LastRanges: make([]downloader.Ranges, concurrencyLimit)}
@@ -70,7 +72,7 @@ func Execute() {
 		dow.Resolve(ctx, flowState)
 	} else {
 
-		slog.Error("ERROR NOTHING<'-'>")
+		slog.Error("[CLI::EXECUTE]: ERROR NOTHING<'-'>")
 		return
 	}
 
@@ -81,12 +83,12 @@ func Execute() {
 		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY, 0644)
 
 		if err != nil {
-			slog.Error("Unable to open the file")
+			slog.Error("[CLI::EXECUTE]:Unable to open the file")
 		}
 
 		json_format, err := json.Marshal(flowState.Stf)
 		if err != nil {
-			slog.Error("JSON Marshalling Failed!!")
+			slog.Error("[CLI::EXECUTE]:JSON Marshalling Failed!!")
 			return
 		}
 

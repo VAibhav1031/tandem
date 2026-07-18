@@ -14,7 +14,7 @@ func (f *Flags) Parser() error {
 
 	if args_length < 3 {
 
-		slog.Error("Error : We need atleast 2 Argument :")
+		slog.Error("[CLI::Parser] : We need atleast 2 Argument :")
 		Usage()
 		os.Exit(1)
 	}
@@ -22,7 +22,7 @@ func (f *Flags) Parser() error {
 		switch args[i] {
 		case "-url", "-URL", "-u", "-U":
 			if i+1 >= args_length {
-				slog.Error("Error there is no Link")
+				slog.Error("[CLI::Parser]: Error there is no Link")
 				return fmt.Errorf("No link")
 			}
 			link := args[i+1]
@@ -36,7 +36,7 @@ func (f *Flags) Parser() error {
 				return linkRegex.MatchString(link)
 			}() {
 
-				slog.Error("Incorrect Link Format !!")
+				slog.Error("[CLI::Parser]: Incorrect Link Format !!")
 				return fmt.Errorf("Incorrect Link Format")
 			}
 			f.Url_link = link
@@ -44,17 +44,17 @@ func (f *Flags) Parser() error {
 
 		case "-concurrent", "-CONCURRENT", "-c", "-C":
 			if i+1 >= args_length {
-				slog.Error("Error, there is no Concurrent Value provided")
+				slog.Error("[CLI::Parser]: Error, there is no Concurrent Value provided")
 				Usage()
 				return fmt.Errorf("No Concurrent Value")
 			}
 			conc_n, err := strconv.Atoi(args[i+1])
 			if err != nil {
-				slog.Error("Concurrent  is not the integer", err)
+				slog.Error("[CLI::Parser]: Concurrent  is not the integer", err)
 				return fmt.Errorf("Conccurrent not integer")
 			}
 			if conc_n < 0 && conc_n > 9 {
-				slog.Error("Not a valid Concurrent Input!!")
+				slog.Error("[CLI::Parser]: Not a valid Concurrent Input!!")
 				Usage()
 				return fmt.Errorf("Not a Valid Input")
 			}
@@ -63,20 +63,20 @@ func (f *Flags) Parser() error {
 			i++
 		case "-OUTPUT", "-output", "-o", "-O":
 			if i+1 >= args_length {
-				slog.Error("There is no output Path")
+				slog.Error("[CLI::Parser]: There is no output Path")
 				Usage()
 				return fmt.Errorf("No output Path")
 			}
 			filePath := args[i+1]
 			if filePath == "" || filePath == "/" || filePath == "" {
-				slog.Error("Error: Invalid or Prohibited FilePath")
+				slog.Error("[CLI::Parser]: Invalid or Prohibited FilePath")
 				Usage()
 				return fmt.Errorf("Prohibited FilePath")
 			}
 			f.Filepath = filePath
 			i++
 		default:
-			slog.Error("Unknown Flags!! ", args[i])
+			slog.Error("[CLI::Parser]: Unknown Flags!! ", args[i])
 			Usage()
 		}
 

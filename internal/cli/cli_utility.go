@@ -67,7 +67,7 @@ func init() {
 
 	home_dir, err := os.UserHomeDir()
 	if err != nil {
-		slog.Error("[CMD-initiator-Error]:Error unable to get the Home Directory")
+		slog.Error("[CLI::CLI-UTILITY]:Error unable to get the Home Directory")
 		return
 	}
 	state_file_path = home_dir + state_file_location
@@ -116,7 +116,7 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 		return "", file_type
 	}
 
-	slog.Info("Filename, file_type choosen correctly")
+	slog.Info("[CLI::CLI-UTILITY]:Filename, file_type choosen correctly")
 	return "", getExtensionFromUrl(url)
 
 	//
@@ -142,12 +142,12 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	req, err := http.NewRequest("GET", f.Url_link, nil)
 	if err != nil {
 
-		slog.Error("[CMD-Error]: Error Ocurred <http Client GET req> : %v\n", err)
+		slog.Error("[CLI::CLI-UTILITY]: Error Ocurred <http Client GET req> : %v\n", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 
-		slog.Error("[CMD-Error]: Network error")
+		slog.Error("[CLI::CLI-UTILITY]: Network error")
 	}
 	defer resp.Body.Close()
 
@@ -191,7 +191,7 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	} else {
 		current_dir, err := os.Getwd()
 		if err != nil {
-			fmt.Printf("[Concurrent-Downloader]: Error Ocurred <Current Directory>: %v\n", err)
+			fmt.Printf("[CLI::CLI-UTILITY]: Error Ocurred <Current Directory>: %v\n", err)
 			return "", "", ""
 		}
 		fullpath = current_dir + filename_with_type
@@ -209,6 +209,7 @@ func (f *Flags) CheckResume() ResultFlow {
 	var fullPath string
 	if f.Filepath == "" {
 		_, _, fullPath = f.dynamicResolution()
+		f.Filepath = fullPath
 
 	}
 	hash := sha256.Sum256([]byte(fullPath))
@@ -224,7 +225,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			// we have to read adn then we have to
 			file_hash, err := os.OpenFile(hash_file_path, os.O_RDONLY, 0644)
 			if err != nil {
-				slog.Error("[CMD-Initiator-Error]: Error in File Opening", err)
+				slog.Error("[CLI::CLI-UTILITY]: Error in File Opening", err)
 				break
 			}
 			buffer := make([]byte, file_stat.Size())
@@ -234,7 +235,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			var json_dedact downloader.State_File_Format
 			err = json.Unmarshal(buffer, &json_dedact)
 			if err != nil {
-				slog.Error("[CMD-Initiator-Error]: Error in the State file Unmarshalling State", err)
+				slog.Error("[CLI::CLI-UTILITY]: Error in the State file Unmarshalling State", err)
 				break
 			}
 
@@ -255,7 +256,6 @@ func (f *Flags) CheckResume() ResultFlow {
 				result_flow.HashStateFile = hash_file_path
 				result_flow.StateFile = &json_dedact
 
-				slog.Info("Both Filepath and StateFile does Matched and exist also , Resume..")
 				return result_flow
 			}
 
@@ -279,12 +279,11 @@ func (f *Flags) CheckResume() ResultFlow {
 				result_flow.Fullpath = fullPath
 				result_flow.HashStateFile = hash_file_path
 
-				slog.Info("No filePath exist!!, Fresh Start..")
 				return result_flow
 
 			}
 		} else {
-			slog.Error("Error in getting the stat of the Hash File")
+			slog.Error("[CLI::CLI-UTILITY]: Error in getting the stat of the Hash File")
 		}
 	}
 

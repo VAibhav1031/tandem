@@ -30,7 +30,7 @@ type Ranges struct {
 	ExpectedLimit  int64 `json:"expectedLimit"`
 }
 type State_File_Format struct {
-	G_ID       int
+	Con        int8     `json:"con"`
 	Url        string   `json:"url"`
 	LastRanges []Ranges `json:"lastRanges"`
 	Filepath   string   `json:"filepath"`
@@ -120,6 +120,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 			conFlow.stf = f_stf.Stf
 			conFlow.headers = req_head
 			conFlow.ctx = ctx
+			slog.Info("[MAXIMIZER]: We gonna Resume Download (Concurrent), OLD concurrent will be used")
 		} else {
 			conFlow.client = *client
 			// give both for the usecase normal one and other
@@ -127,9 +128,14 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 			conFlow.stf = f_stf.Stf
 			conFlow.ctx = ctx
 			conFlow.isReady = true
+
+			slog.Info("[MAXIMIZER]: We gonna Resume Download (Concurrent), OLD concurrent will be used")
 		}
 		d.ConcurrentDownloader(conFlow)
 	} else {
+
+		slog.Info("[MAXIMIZER]: We gonna Fresh Download everytime (No concurrent)")
+
 		d.DownloadNormal(req_head, client)
 	}
 

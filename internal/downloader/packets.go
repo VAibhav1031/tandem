@@ -234,6 +234,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 				select {
 
 				case <-ct.ctx.Done():
+
 					atomic.StoreInt64(&ct.stf.LastRanges[Part_ID].CurrentOffsets, currentOffset)
 					slog.Info("Cancel Sucessfully Done!!")
 					return
