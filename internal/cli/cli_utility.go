@@ -292,6 +292,14 @@ func (f *Flags) CheckResume() ResultFlow {
 }
 func Usage() {
 	// need to
-	multi_usage := ``
+	multi_usage := `
+Usage:
+	tandem -u <url> -c <concurrency> -o <output path>
+
+The Commands are :
+
+	help   Give usage Message 
+	setup  For initial setup of the essential directories of logs and state-files
+	`
 	fmt.Println(multi_usage)
 }

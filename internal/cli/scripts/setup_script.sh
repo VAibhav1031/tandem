@@ -2,7 +2,7 @@
 
 set -e 
 
-location="~/.local/tandem"
-mkdir -p $location/{"json_data","logs"}
+location="$HOME/.local/tandem"
+mkdir -p "$location"/{json_data,logs}
 
 echo "DONE.."

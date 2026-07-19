@@ -75,9 +75,16 @@ func (f *Flags) Parser() error {
 			}
 			f.Filepath = filePath
 			i++
+
+		case "help":
+			Usage()
+			return fmt.Errorf("Usage being called ")
+
 		default:
 			slog.Error("[CLI::Parser]: Unknown Flags!! ", args[i])
-			Usage()
+			fmt.Printf("%v : unkown command \nRun 'tandem help' for usage.", args[i])
+			return fmt.Errorf("Unknown Command")
+			//Usage()
 		}
 
 	}

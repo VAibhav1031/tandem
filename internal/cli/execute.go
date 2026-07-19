@@ -15,8 +15,6 @@ const DefaultConcurrency = 4
 
 func Execute() {
 
-	Banner()
-	fmt.Println("==========TANDEM DOWNLOADER===========")
 	// var link string = "https://filesamples.com/samples/document/csv/sample4.csv"
 	// var link string = "https://pub-821312cfd07a4061bf7b99c1f23ed29b.r2.dev/3dicons-png-dynamic-1.0.0.zip"
 	// var link string = "https://ash-speed.hetzner.com/100MB.bin"
@@ -31,6 +29,9 @@ func Execute() {
 		slog.Error("[CLI::EXECUTE]:Parsing Failed")
 		os.Exit(1)
 	}
+
+	Banner()
+	fmt.Println("==========TANDEM DOWNLOADER===========")
 
 	// we have to check we can resume , if so then it is okay , if not then we have to start again
 	check := f.CheckResume()

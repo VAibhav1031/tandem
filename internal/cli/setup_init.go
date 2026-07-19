@@ -14,20 +14,20 @@ func RunSetup() {
 
 	temp_file, err := os.CreateTemp("", "setup-*.sh")
 	if err != nil {
-		slog.Error("Failed To Create Tempfile")
+		slog.Error("[CLI::SETUP-INIT]: Failed To Create Tempfile")
 		return
 	}
 
 	defer os.Remove(temp_file.Name())
 
 	if _, err := temp_file.WriteString(setupString); err != nil {
-		slog.Error("Failed to Write Script")
+		slog.Error("[CLI::SETUP-INIT]: Failed to Write Script")
 		return
 	}
 	temp_file.Close()
 
 	if err := os.Chmod(temp_file.Name(), 0755); err != nil {
-		slog.Error("Failed to set persmission;")
+		slog.Error("[CLI::SETUP-INIT]: Failed to set persmission;")
 		return
 	}
 
@@ -36,9 +36,9 @@ func RunSetup() {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		slog.Error("Script execution failed")
+		slog.Error("[CLI::SETUP-INIT]: Script execution failed")
 	}
 
-	slog.Info("Initial Setup is completed")
+	slog.Info("[CLI::SETUP-INIT]: Initial Setup is completed")
 
 }
