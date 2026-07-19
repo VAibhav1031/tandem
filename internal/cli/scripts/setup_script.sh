@@ -2,7 +2,7 @@
 
 set -e 
 
-location="/home/necromancer/.local/tandem"
+location="~/.local/tandem"
 mkdir -p $location/{"json_data","logs"}
 
 echo "DONE.."
