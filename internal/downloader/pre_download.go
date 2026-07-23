@@ -17,7 +17,7 @@ import (
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/publicsuffix"
 
-	"github.com/VAibhav1031/tandem/internal/cookiesManager"
+	//"github.com/VAibhav1031/tandem/internal/cookiesManager"
 	"golang.org/x/net/http2"
 )
 
@@ -40,7 +40,7 @@ type FlareSolverrResponse struct {
 	} `json:"solution"`
 }
 
-var GlobalCookieCache = cookies.CookieSolver()
+//var GlobalCookieCache = cookies.CookieSolver()
 
 type UTLSTransport struct {
 	Next http.RoundTripper
@@ -82,25 +82,25 @@ type LocalCookieTransport struct {
 	HomeDomain string
 }
 
-func (t *LocalCookieTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-
-	if t.HomeDomain == "" {
-		t.HomeDomain = getBaseDomain(req.URL.String())
-	}
-	currentBase := getBaseDomain(req.URL.String())
-	slog.Info("[Tier 2] Base domain ", t.HomeDomain)
-	if currentBase == t.HomeDomain {
-		if GlobalCookieCache != "" {
-			slog.Info("[Tier 2] Currently they are same and we got the GlobalCookieCache,", GlobalCookieCache)
-
-			req.Header.Set("Cookie", "cf_clearance="+GlobalCookieCache)
-		}
-	} else {
-		req.Header.Del("Cookie")
-		slog.Info("[Tier 2] Cross-domain Jump: ", t.HomeDomain, "->", currentBase, ". Cookies Stripped")
-	}
-	return t.Next.RoundTrip(req)
-}
+// func (t *LocalCookieTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+//
+// 	if t.HomeDomain == "" {
+// 		t.HomeDomain = getBaseDomain(req.URL.String())
+// 	}
+// 	currentBase := getBaseDomain(req.URL.String())
+// 	slog.Info("[Tier 2] Base domain ", t.HomeDomain)
+// 	if currentBase == t.HomeDomain {
+// 		if GlobalCookieCache != "" {
+// 			slog.Info("[Tier 2] Currently they are same and we got the GlobalCookieCache,", GlobalCookieCache)
+//
+// 			req.Header.Set("Cookie", "cf_clearance="+GlobalCookieCache)
+// 		}
+// 	} else {
+// 		req.Header.Del("Cookie")
+// 		slog.Info("[Tier 2] Cross-domain Jump: ", t.HomeDomain, "->", currentBase, ". Cookies Stripped")
+// 	}
+// 	return t.Next.RoundTrip(req)
+// }
 
 func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
@@ -298,46 +298,46 @@ func itcontainsPort(host string) bool {
 type SolverTransport struct {
 	Next http.RoundTripper
 }
-
-func (t *SolverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// 1. Send the request down the chain
-	slog.Info("[Tier 3] Pass the Request Forward")
-	resp, err := t.Next.RoundTrip(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. RIPPLE BACK check: Did Cloudflare block us with a challenge?
-	// (Your exact debug header was "Cf-Mitigated: [challenge]")
-	if resp.StatusCode == 403 && resp.Header.Get("Cf-Mitigated") == "challenge" {
-		slog.Info("[Tier 3 ] First-Two-Level-FAILED !!")
-		slog.Info("[Tier 3] ALERT: Cloudflare Challenge Detected (Cf-Mitigated: [challenge])!")
-		slog.Info("[Tier 3] Local cookie failed or was expired.")
-
-		// ALWAYS close the rejected response body to prevent memory leaks
-		resp.Body.Close()
-
-		// 3. Trigger Tier 3 solver logic (FlareSolverr or prompt user)
-		slog.Error("[Tier 3] Spinning up solver sequence...")
-
-		newCookie, solvedUA, err := runFlareSolverr(req.URL.String())
-		if err == nil {
-			// 4. Update our local SQLite/disk cache so we have it for next time
-			slog.Info("[Tier 3] New Cookie: ", newCookie)
-			GlobalCookieCache = newCookie
-			slog.Info("[Tier 3] Fresh cookie cached successfully.")
-
-			req.Header.Set("User-Agent", solvedUA)
-
-			// 5. RETRY: Send the request down the chain a second time
-			slog.Info("[Tier 3] Retrying request with the fresh cookie...\n")
-			return t.Next.RoundTrip(req)
-		}
-		slog.Info("[Tier 3] Err : %v", err)
-	}
-	// If no challenge, just let the successful response ripple back normally
-	return resp, nil
-}
+//
+// func (t *SolverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+// 	// 1. Send the request down the chain
+// 	slog.Info("[Tier 3] Pass the Request Forward")
+// 	resp, err := t.Next.RoundTrip(req)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	// 2. RIPPLE BACK check: Did Cloudflare block us with a challenge?
+// 	// (Your exact debug header was "Cf-Mitigated: [challenge]")
+// 	if resp.StatusCode == 403 && resp.Header.Get("Cf-Mitigated") == "challenge" {
+// 		slog.Info("[Tier 3 ] First-Two-Level-FAILED !!")
+// 		slog.Info("[Tier 3] ALERT: Cloudflare Challenge Detected (Cf-Mitigated: [challenge])!")
+// 		slog.Info("[Tier 3] Local cookie failed or was expired.")
+//
+// 		// ALWAYS close the rejected response body to prevent memory leaks
+// 		resp.Body.Close()
+//
+// 		// 3. Trigger Tier 3 solver logic (FlareSolverr or prompt user)
+// 		slog.Error("[Tier 3] Spinning up solver sequence...")
+//
+// 		newCookie, solvedUA, err := runFlareSolverr(req.URL.String())
+// 		if err == nil {
+// 			// 4. Update our local SQLite/disk cache so we have it for next time
+// 			slog.Info("[Tier 3] New Cookie: ", newCookie)
+// 			GlobalCookieCache = newCookie
+// 			slog.Info("[Tier 3] Fresh cookie cached successfully.")
+//
+// 			req.Header.Set("User-Agent", solvedUA)
+//
+// 			// 5. RETRY: Send the request down the chain a second time
+// 			slog.Info("[Tier 3] Retrying request with the fresh cookie...\n")
+// 			return t.Next.RoundTrip(req)
+// 		}
+// 		slog.Info("[Tier 3] Err : %v", err)
+// 	}
+// 	// If no challenge, just let the successful response ripple back normally
+// 	return resp, nil
+// }
 func runFlareSolverr(targetURL string) (string, string, error) {
 
 	flareURL := "http://localhost:8191/v1"

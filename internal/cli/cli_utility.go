@@ -142,12 +142,14 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	req, err := http.NewRequest("GET", f.Url_link, nil)
 	if err != nil {
 
-		slog.Error("[CLI::CLI-UTILITY]: Error Ocurred <http Client GET req> : %v\n", err)
+		slog.Error("[CLI::CLI-UTILITY]: Error Ocurred <http Client GET req>","error: ", err)
+		return "", "", ""
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 
-		slog.Error("[CLI::CLI-UTILITY]: Network error")
+		slog.Error("[CLI::CLI-UTILITY]: Network Failure ","error: ",err)
+		return "" , "", ""
 	}
 	defer resp.Body.Close()
 

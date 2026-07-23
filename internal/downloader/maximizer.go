@@ -69,7 +69,8 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Error("[Downloader-Maximizer]: Network error")
+		slog.Error("[Downloader-Maximizer]: Network Failure!!","error: ", err)
+		return
 	}
 
 	defer resp.Body.Close()
