@@ -248,7 +248,7 @@ func (f *Flags) CheckResume() ResultFlow {
 				splited_value := strings.Split(fullPath, "/")
 				type_extract := strings.Split(splited_value[len(splited_value)-1], ".")[0]
 				length_string := len(splited_value[len(splited_value)-1])
-				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)"+type_extract, increment)
+				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)."+type_extract, increment)
 				continue // check again for this filepath
 
 			} else {
@@ -270,7 +270,7 @@ func (f *Flags) CheckResume() ResultFlow {
 				splited_value := strings.Split(fullPath, "/")
 				type_extract := strings.Split(splited_value[len(splited_value)-1], ".")[0]
 				length_string := len(splited_value[len(splited_value)-1])
-				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)"+type_extract, increment)
+				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)."+type_extract, increment)
 				continue // check again for this filepath
 
 			} else if errors.Is(err, os.ErrNotExist) {

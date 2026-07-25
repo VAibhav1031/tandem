@@ -1,4 +1,4 @@
-FROM  golang:1.26-apline as builder
+FROM  golang:1.26-alpine as builder
 
 WORKDIR /app 
 
@@ -12,10 +12,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o tandem ./cmd/tandem-cli/main.go
 
 
 
-FROM apline:latest 
+FROM alpine:latest 
 WORKDIR /root/
 
 COPY --from=builder /app/tandem . 
-CMD ["./tandem"]
+# CMD ["./tandem"]
 
 
