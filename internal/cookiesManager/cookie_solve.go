@@ -38,7 +38,7 @@ func CookieSolver() string {
 
 	home_dir, err := os.UserHomeDir()
 	if err != nil {
-		slog.Error("No HomeDir found!!", err)
+		slog.Error("No HomeDir found!!", "error: ", err)
 	}
 
 	cookie_path := home_dir + "/.config/chromium/Default/Cookies"
@@ -47,20 +47,20 @@ func CookieSolver() string {
 	defer os.Remove(temp_file_path_info.Name())
 	defer temp_file_path_info.Close()
 	if err != nil {
-		slog.Error("Creation of Temp Failed", err)
+		slog.Error("Creation of Temp Failed", "error: ", err)
 		return ""
 	}
 
 	db, err := sql.Open("sqlite", temp_file_path_info.Name())
 	if err != nil {
-		slog.Error("Error Occurred %v", err)
+		slog.Error("Error Occurred ", "error: ", err)
 		return ""
 	}
 	defer db.Close()
 
 	// Ping to the db to check if connection working well or not
 	if err := db.Ping(); err != nil {
-		fmt.Println("Failed to connect:", err)
+		fmt.Println("Failed to connect:", "error: ", err)
 	}
 
 	// rows, err := db.Query("SELECT name FROM sqlite_master ;")
@@ -82,14 +82,14 @@ func CookieSolver() string {
 	rows, err := db.Query("Select encrypted_value from cookies where name = 'cf_clearance' and host_key = '.testfile.org' order by creation_utc desc limit 1;")
 
 	if err != nil {
-		slog.Error("Query Failed over the cookie Table", err)
+		slog.Error("Query Failed over the cookie Table", "error: ", err)
 	}
 	defer rows.Close()
 
 	var encrypted_value []byte
 	for rows.Next() {
 		if err := rows.Scan(&encrypted_value); err != nil {
-			slog.Error("Unable to Scan the encrypted Value", err)
+			slog.Error("Unable to Scan the encrypted Value", "error", err)
 		}
 		//fmt.Printf("- %s\n", row_)
 	}
@@ -100,7 +100,7 @@ func CookieSolver() string {
 	key := DbusKeyGetter()
 	cookie, err := decryptCookie(encrypted_value, key)
 	if err != nil {
-		slog.Error("Error In Decryption: ", err)
+		slog.Error("Error In Decryption: ", "error:", err)
 		return ""
 	}
 	return cookie
