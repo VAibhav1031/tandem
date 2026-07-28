@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 )
 
@@ -20,20 +20,22 @@ func (f *Flags) Parser() error {
 	}
 	for i := 0; i < args_length-1; i++ {
 		switch args[i] {
-		case "-url", "-URL", "-u", "-U":
-			if i+1 >= args_length {
+		case "-url", "-u", "-U":
+			if i+1 > args_length-1 {
 				slog.Error("[CLI::Parser]: Error there is no Link")
 				return fmt.Errorf("No link")
 			}
+
 			link := args[i+1]
 			if !func() bool {
-				linkRegex, err := regexp.Compile(`^https?://[^\s$.?#].[^\s]*$`)
+				url_parser, err := url.Parse(link) // better approach then the Regex usage
 				if err != nil {
 					return false
-					//log
-					// exit
 				}
-				return linkRegex.MatchString(link)
+				if url_parser.Host == " " {
+					return false
+				}
+				return true
 			}() {
 
 				slog.Error("[CLI::Parser]: Incorrect Link Format !!")
@@ -42,8 +44,8 @@ func (f *Flags) Parser() error {
 			f.Url_link = link
 			i++
 
-		case "-concurrent", "-CONCURRENT", "-c", "-C":
-			if i+1 >= args_length {
+		case "-concurrent", "-c", "-C":
+			if i+1 > args_length-1 {
 				slog.Error("[CLI::Parser]: Error, there is no Concurrent Value provided")
 				Usage()
 				return fmt.Errorf("No Concurrent Value")
@@ -61,8 +63,8 @@ func (f *Flags) Parser() error {
 
 			f.Concurrent_n = conc_n
 			i++
-		case "-OUTPUT", "-output", "-o", "-O":
-			if i+1 >= args_length {
+		case "-output", "-o", "-O":
+			if i+1 > args_length-1 {
 				slog.Error("[CLI::Parser]: There is no output Path")
 				Usage()
 				return fmt.Errorf("No output Path")
@@ -77,8 +79,29 @@ func (f *Flags) Parser() error {
 			i++
 
 		case "help":
+			if i+1 <= args_length-1 {
+				// fmt.Println(args[i+1])
+				if i+1+1 <= len(args)-1 {
+					// fmt.Println(i+1+1, args_length-1)
+					fmt.Printf("No help for '%v' \n", args[i+1]+args[i+1+1])
+					return fmt.Errorf("Usage Helper function  called!!")
+				}
+
+				if args[i+1] == "concurrent" {
+					con_usage()
+				} else if args[i+1] == "url" {
+					url_usage()
+				} else {
+					fmt.Println("There is no such Sub-command")
+					slog.Error("[CLI::Parser]: Illegal  subcommand in help !!")
+
+				}
+				i++
+				return fmt.Errorf("Subcommand Usasge helper function called!!")
+			}
+
 			Usage()
-			return fmt.Errorf("Usage being called ")
+			return fmt.Errorf("Usage helper function called !!")
 
 		default:
 			slog.Error("[CLI::Parser]: Unknown Flags!! ", args[i])

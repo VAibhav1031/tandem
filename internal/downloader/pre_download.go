@@ -115,7 +115,7 @@ func dialUTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Con
 		tcpConn.Close()
 		return nil, fmt.Errorf("split host/port: %w", err)
 	}
-	slog.Info("[Tier1]-[spook_TLS]: HOST ", host)
+	slog.Info("[Tier1]-[spook_TLS]:", "Host-> ", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName:         host,
@@ -261,7 +261,7 @@ func (d *DualTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		tcpConn.Close()
 		return nil, fmt.Errorf("split host/port: %w", err)
 	}
-	slog.Info("[Tier1]-[spook_TLS]: HOST ", host)
+	slog.Info("[Tier1]-[spook_TLS]: ", "Host ->", host)
 
 	uConn := utls.UClient(tcpConn, &utls.Config{
 		ServerName:         host,
@@ -298,46 +298,46 @@ func itcontainsPort(host string) bool {
 type SolverTransport struct {
 	Next http.RoundTripper
 }
+
+//	func (t *SolverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+//		// 1. Send the request down the chain
+//		slog.Info("[Tier 3] Pass the Request Forward")
+//		resp, err := t.Next.RoundTrip(req)
+//		if err != nil {
+//			return nil, err
+//		}
 //
-// func (t *SolverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-// 	// 1. Send the request down the chain
-// 	slog.Info("[Tier 3] Pass the Request Forward")
-// 	resp, err := t.Next.RoundTrip(req)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+//		// 2. RIPPLE BACK check: Did Cloudflare block us with a challenge?
+//		// (Your exact debug header was "Cf-Mitigated: [challenge]")
+//		if resp.StatusCode == 403 && resp.Header.Get("Cf-Mitigated") == "challenge" {
+//			slog.Info("[Tier 3 ] First-Two-Level-FAILED !!")
+//			slog.Info("[Tier 3] ALERT: Cloudflare Challenge Detected (Cf-Mitigated: [challenge])!")
+//			slog.Info("[Tier 3] Local cookie failed or was expired.")
 //
-// 	// 2. RIPPLE BACK check: Did Cloudflare block us with a challenge?
-// 	// (Your exact debug header was "Cf-Mitigated: [challenge]")
-// 	if resp.StatusCode == 403 && resp.Header.Get("Cf-Mitigated") == "challenge" {
-// 		slog.Info("[Tier 3 ] First-Two-Level-FAILED !!")
-// 		slog.Info("[Tier 3] ALERT: Cloudflare Challenge Detected (Cf-Mitigated: [challenge])!")
-// 		slog.Info("[Tier 3] Local cookie failed or was expired.")
+//			// ALWAYS close the rejected response body to prevent memory leaks
+//			resp.Body.Close()
 //
-// 		// ALWAYS close the rejected response body to prevent memory leaks
-// 		resp.Body.Close()
+//			// 3. Trigger Tier 3 solver logic (FlareSolverr or prompt user)
+//			slog.Error("[Tier 3] Spinning up solver sequence...")
 //
-// 		// 3. Trigger Tier 3 solver logic (FlareSolverr or prompt user)
-// 		slog.Error("[Tier 3] Spinning up solver sequence...")
+//			newCookie, solvedUA, err := runFlareSolverr(req.URL.String())
+//			if err == nil {
+//				// 4. Update our local SQLite/disk cache so we have it for next time
+//				slog.Info("[Tier 3] New Cookie: ", newCookie)
+//				GlobalCookieCache = newCookie
+//				slog.Info("[Tier 3] Fresh cookie cached successfully.")
 //
-// 		newCookie, solvedUA, err := runFlareSolverr(req.URL.String())
-// 		if err == nil {
-// 			// 4. Update our local SQLite/disk cache so we have it for next time
-// 			slog.Info("[Tier 3] New Cookie: ", newCookie)
-// 			GlobalCookieCache = newCookie
-// 			slog.Info("[Tier 3] Fresh cookie cached successfully.")
+//				req.Header.Set("User-Agent", solvedUA)
 //
-// 			req.Header.Set("User-Agent", solvedUA)
-//
-// 			// 5. RETRY: Send the request down the chain a second time
-// 			slog.Info("[Tier 3] Retrying request with the fresh cookie...\n")
-// 			return t.Next.RoundTrip(req)
-// 		}
-// 		slog.Info("[Tier 3] Err : %v", err)
-// 	}
-// 	// If no challenge, just let the successful response ripple back normally
-// 	return resp, nil
-// }
+//				// 5. RETRY: Send the request down the chain a second time
+//				slog.Info("[Tier 3] Retrying request with the fresh cookie...\n")
+//				return t.Next.RoundTrip(req)
+//			}
+//			slog.Info("[Tier 3] Err : %v", err)
+//		}
+//		// If no challenge, just let the successful response ripple back normally
+//		return resp, nil
+//	}
 func runFlareSolverr(targetURL string) (string, string, error) {
 
 	flareURL := "http://localhost:8191/v1"

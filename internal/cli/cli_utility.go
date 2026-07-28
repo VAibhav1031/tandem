@@ -142,14 +142,14 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	req, err := http.NewRequest("GET", f.Url_link, nil)
 	if err != nil {
 
-		slog.Error("[CLI::CLI-UTILITY]: Error Ocurred <http Client GET req>","error: ", err)
+		slog.Error("[CLI::CLI-UTILITY]: Error Ocurred <http Client GET req>", "error: ", err)
 		return "", "", ""
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 
-		slog.Error("[CLI::CLI-UTILITY]: Network Failure ","error: ",err)
-		return "" , "", ""
+		slog.Error("[CLI::CLI-UTILITY]: Network Failure ", "error: ", err)
+		return "", "", ""
 	}
 	defer resp.Body.Close()
 
@@ -205,6 +205,16 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	return filename, filetype, fullpath
 }
 
+func filePathResolution(filePath string, increment_value int) string {
+	splited_value := strings.Split(filePath, "/")
+	type_splitted := strings.Split(splited_value[len(splited_value)-1], ".")
+	type_extract := type_splitted[len(type_splitted)-1]
+	to_be_joined_folder := splited_value[:len(splited_value)-1]
+	fullPath := strings.Join(to_be_joined_folder, "/") + fmt.Sprintf("/download_file(%d)."+type_extract, increment_value)
+
+	return fullPath
+}
+
 func (f *Flags) CheckResume() ResultFlow {
 	// check for the flag filepath (included with filename at the end)
 	var result_flow ResultFlow
@@ -245,14 +255,12 @@ func (f *Flags) CheckResume() ResultFlow {
 			if json_dedact.Url != f.Url_link {
 				// no it is nto se // means the hash opened here is of the duplicate path of the download  we need to  increment that
 				increment++
-				splited_value := strings.Split(fullPath, "/")
-				type_extract := strings.Split(splited_value[len(splited_value)-1], ".")[0]
-				length_string := len(splited_value[len(splited_value)-1])
-				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)."+type_extract, increment)
+				fullPath = filePathResolution(fullPath, increment)
 				continue // check again for this filepath
 
 			} else {
 				//Resume safely
+				fmt.Println(fullPath)
 				result_flow.Result = CanResume
 				result_flow.Fullpath = fullPath
 				result_flow.HashStateFile = hash_file_path
@@ -267,16 +275,15 @@ func (f *Flags) CheckResume() ResultFlow {
 			if err == nil {
 				// filepath of same name file  exist but no state_file
 				increment++
-				splited_value := strings.Split(fullPath, "/")
-				type_extract := strings.Split(splited_value[len(splited_value)-1], ".")[0]
-				length_string := len(splited_value[len(splited_value)-1])
-				fullPath = fullPath[:length_string] + fmt.Sprintf("/download_file(%d)."+type_extract, increment)
+				fullPath = filePathResolution(fullPath, increment)
 				continue // check again for this filepath
 
 			} else if errors.Is(err, os.ErrNotExist) {
 
 				// Start Fresh  filepath doesnt exist , means it is freash to start
 				// return start_fresh
+
+				fmt.Println(fullPath)
 				result_flow.Result = CanStart
 				result_flow.Fullpath = fullPath
 				result_flow.HashStateFile = hash_file_path
@@ -299,9 +306,58 @@ Usage:
 	tandem -u <url> -c <concurrency> -o <output path>
 
 The Commands are :
-
 	help   Give usage Message 
 	setup  For initial setup of the essential directories of logs and state-files
+
+Insight:
+	help <sub-command> :
+		Will give the usage details  of the sub-command.
+		Here sub command related to the arguments/command provided.
+	
 	`
 	fmt.Println(multi_usage)
+}
+
+func con_usage() {
+	// help/usage for the subcommand
+
+	con := `
+"concurrent" Usage:
+	
+	-c <value> / -concurrent <value> / -C <value> 
+	
+	This command  is used to  provide the   concurrent downloading workers,
+	Which will be used for the downloading  of the object. 
+	
+
+<value>:
+	Only from  0 to 9 are allowed.
+
+DEFAULT:
+	By default 4 is used for better usage.
+
+`
+
+	fmt.Println(con)
+}
+
+func url_usage() {
+	con := `
+"url" Usage:
+	
+	-u <url> / -url <url> / -U <url> 
+	
+	url command used to provide the url for which download request has to be
+	taken.
+	
+<url>:
+	A perfect url with https:// is allowed 
+
+DEFAULT:
+	There  is no default url , it is necessary to provide url.
+	Else it would be error
+
+	`
+
+	fmt.Println(con)
 }
