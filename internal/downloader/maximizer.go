@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -69,14 +70,14 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Error("[Downloader-Maximizer]: Network Failure!!","error: ", err)
+		slog.Error("[Downloader-Maximizer]: Network Failure!!", "error: ", err)
 		return
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		slog.Error("[Concurrent-Error]: ", err, " Code-> ", resp.StatusCode)
+		slog.Error("[Downloader-Maximizer-ERROR]:", err, " Code-> ", resp.StatusCode)
 		return
 	}
 	req_head := ServerResponse(resp.Header)
@@ -87,15 +88,16 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 		// if stf.
 
 		var conFlow concurrentFlow
+		totalSize, _ := strconv.Atoi(req_head.Content_length)
+		slog.Info("totalSize of the file", totalSize, "and in the gb", (float64(totalSize) / float64(1024*1024*1024)))
+
+		batchSize := int64(math.Ceil(float64(totalSize) / float64(d.Rs.Con_n)))
+		slog.Info("floated value ", ":", math.Ceil(float64(totalSize)/float64(d.Rs.Con_n)))
+		start, limit := int64(0), batchSize
+		f_stf.Stf.LastRanges[0] = Ranges{CurrentOffsets: start, ExpectedLimit: limit}
+
 		if f_stf.Resume_stf.Url == "" {
-			totalSize, _ := strconv.Atoi(req_head.Content_length)
-			slog.Info("totalSize of the file", totalSize, "and in the gb", (float64(totalSize) / float64(1024*1024*1024)))
-
-			batchSize := int64(math.Ceil(float64(totalSize) / float64(d.Rs.Con_n)))
-			slog.Info("floated value : ", math.Ceil(float64(totalSize)/float64(d.Rs.Con_n)))
-			start, limit := int64(0), batchSize
-
-			for i := 0; i < int(d.Rs.Con_n); i++ {
+			for i := 1; i < int(d.Rs.Con_n); i++ {
 				// start = int64(i) * batchSize
 				// limit = start + batchSize
 				//
@@ -115,12 +117,26 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 				}
 			}
 
+			fmt.Println(f_stf.Stf.LastRanges)
 			conFlow.client = *client
 			conFlow.stf = f_stf.Stf
 			conFlow.headers = req_head
 			conFlow.ctx = ctx
-			slog.Info("[MAXIMIZER]: We gonna Resume Download (Concurrent), OLD concurrent will be used")
+			slog.Info("[Downloader-Maximizer]: We are gonaa Fresh  Download (Concurrent), OLD n-concurrent will be used")
 		} else {
+
+			for i := 0; i < int(d.Rs.Con_n); i++ {
+				// start = limit
+				// limit = start + batchSize
+				//
+				// if limit%int64(totalSize) != limit {
+				// 	limit = limit - (limit % int64(totalSize))
+				// }
+				f_stf.Stf.LastRanges[i] = Ranges{
+					ExpectedLimit: f_stf.Resume_stf.LastRanges[i].ExpectedLimit,
+				}
+			}
+			fmt.Println(f_stf.Stf.LastRanges)
 			conFlow.client = *client
 			// give both for the usecase normal one and other
 			conFlow.resumeStf = f_stf.Resume_stf
@@ -128,12 +144,12 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 			conFlow.ctx = ctx
 			conFlow.isReady = true
 
-			slog.Info("[MAXIMIZER]: We gonna Resume Download (Concurrent), OLD concurrent will be used")
+			slog.Info("[Downloader-Maximizer]: We  are gonna Resume Download (Concurrent), OLD n-concurrent will be used")
 		}
 		d.ConcurrentDownloader(conFlow)
 	} else {
 
-		slog.Info("[MAXIMIZER]: We gonna Fresh Download everytime (No concurrent)")
+		slog.Info("[Downloader-Maximizer]: We are gonna Fresh Download everytime (No concurrent)")
 
 		d.DownloadNormal(req_head, client)
 	}

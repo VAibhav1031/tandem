@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +12,7 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"sync/atomic"
+	// "sync/atomic"
 	"syscall"
 	"time"
 )
@@ -235,16 +236,29 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 				case <-ct.ctx.Done():
 
-					atomic.StoreInt64(&ct.stf.LastRanges[Part_ID].CurrentOffsets, currentOffset)
-					slog.Info("[Concurrent]:Cancel Sucessfully Done!!")
+					remainingBytes := expectedLimit - currentOffset
+					if remainingBytes < 0 {
+						fmt.Println("HOw Come we are not comming here  ")
+						currentOffset = expectedLimit
+						// fmt.Println(Part_ID, currentOffset)
+					}
+					// atomic.StoreInt64(&ct.stf.LastRanges[Part_ID].CurrentOffsets, currentOffset)
+					d.cn.mw.Lock()
+					ct.stf.LastRanges[Part_ID].CurrentOffsets = currentOffset
+					d.cn.mw.Unlock()
+					fmt.Println(Part_ID, currentOffset, ct.stf.LastRanges[Part_ID].ExpectedLimit)
+					slog.Info("[Concurrent]: Cancel.., Sucessfully Paused with current Offset States!!")
 					return
 
 				default:
-					remainingBytes := expectedLimit - currentOffset
-					if remainingBytes < 0 {
-						return
-					}
-
+					// remainingBytes := expectedLimit - currentOffset
+					// if remainingBytes < 0 {
+					// 	fmt.Println("HOw Come we are not comming here  ")
+					//
+					// 	fmt.Println(Part_ID, currentOffset)
+					// 	return
+					// }
+					//
 					if current == globalTryLimit {
 						d.cn.mw.Lock()
 						d.cn.passed = false
@@ -306,9 +320,9 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 					resp.Body.Close()
 
-					if currentOffset >= expectedLimit {
-						break
-					}
+					// if currentOffset >= expectedLimit {
+					// 	break
+					// }
 					// // read to the correct section of the buffer
 					// destBuffer := d.cn.buffer[currentOffset:expectedLimit]
 					// n, err := io.ReadFull(resp.Body, destBuffer)
@@ -333,9 +347,18 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 	if !d.cn.passed {
 		slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
+		fmt.Println("Download Failed!!")
 		return
 	} else {
-		fmt.Println("SUCESSFULLY DONE :)")
+		// remove the state file if there
+		if ct.ctx.Err() != context.Canceled { // then only the  file has either gone fully downloaded or not canceled
+			err := os.Remove(d.Rs.StateFileLocation)
+			if err != nil {
+				slog.Error("[Concurrent-Error]: StateFile Deletion Failed on download completion")
+				return
+			}
+			fmt.Println("SUCESSFULLY DONE :)")
+		}
 	}
 
 }

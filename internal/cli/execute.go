@@ -81,8 +81,8 @@ func Execute() {
 		// we  have to save the state file
 		// open the file
 
-		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY, 0644)
-
+		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		defer statefile.Close()
 		if err != nil {
 			slog.Error("[CLI::EXECUTE]:Unable to open the file")
 		}
@@ -94,5 +94,7 @@ func Execute() {
 		}
 
 		statefile.Write(json_format)
+
+		fmt.Println("PAUSED...")
 	}
 }
