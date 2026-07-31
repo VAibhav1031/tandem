@@ -65,7 +65,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 	req, err := http.NewRequestWithContext(ctx, "HEAD", d.Rs.Link, nil)
 	if err != nil {
-		slog.Error("[Downloader-Maximizer]: Error Ocurred <http Client GET req> : ", err)
+		slog.Error("[Downloader-Maximizer]: Error Ocurred <http Client GET req> ", slog.Any("error", err))
 	}
 
 	resp, err := client.Do(req)
@@ -77,7 +77,8 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		slog.Error("[Downloader-Maximizer-ERROR]:", err, " Code-> ", resp.StatusCode)
+
+		slog.Error("[Downloader-Maximizer-ERROR]:", slog.Any("status-code", resp.StatusCode), slog.Any("status", resp.Status), slog.Any("url", resp.Request.URL.String()))
 		return
 	}
 	req_head := ServerResponse(resp.Header)
@@ -89,7 +90,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 		var conFlow concurrentFlow
 		totalSize, _ := strconv.Atoi(req_head.Content_length)
-		slog.Info("totalSize of the file", totalSize, "and in the gb", (float64(totalSize) / float64(1024*1024*1024)))
+		slog.Info(fmt.Sprintf("totalSize of the file %v and in the gb %v", totalSize, (float64(totalSize) / float64(1024*1024*1024))))
 
 		batchSize := int64(math.Ceil(float64(totalSize) / float64(d.Rs.Con_n)))
 		slog.Info("floated value ", ":", math.Ceil(float64(totalSize)/float64(d.Rs.Con_n)))

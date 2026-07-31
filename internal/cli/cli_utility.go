@@ -237,7 +237,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			// we have to read adn then we have to
 			file_hash, err := os.OpenFile(hash_file_path, os.O_RDONLY, 0644)
 			if err != nil {
-				slog.Error("[CLI::CLI-UTILITY]: Error in File Opening", err)
+				slog.Error("[CLI::CLI-UTILITY]: Error in File Opening", slog.Any("error", err))
 				break
 			}
 			buffer := make([]byte, file_stat.Size())
@@ -247,7 +247,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			var json_dedact downloader.State_File_Format
 			err = json.Unmarshal(buffer, &json_dedact)
 			if err != nil {
-				slog.Error("[CLI::CLI-UTILITY]: Error in the State file Unmarshalling State", err)
+				slog.Error("[CLI::CLI-UTILITY]: Error in the State file Unmarshalling State", slog.Any("error", err))
 				break
 			}
 

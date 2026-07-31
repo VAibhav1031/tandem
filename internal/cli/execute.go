@@ -78,8 +78,7 @@ func Execute() {
 	}
 
 	if ctx.Err() == context.Canceled {
-		// we  have to save the state file
-		// open the file
+		// To save the Last state
 
 		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		defer statefile.Close()

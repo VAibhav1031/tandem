@@ -46,7 +46,7 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	// which return the placeholder and sessionPath for that thing in return
 	err := service.Call("org.freedesktop.Secret.Service.OpenSession", 0, "plain", dbus.MakeVariant("")).Store(&placeHolder, &sessionPath)
 	if err != nil {
-		slog.Error("[gnomeKey] : OpenSession Failed = %v", err)
+		slog.Error("[gnomeKey] : OpenSession Failed", slog.Any("error", err))
 		return fallback()
 	}
 
@@ -59,7 +59,7 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	var locked []dbus.ObjectPath
 	err = service.Call("org.freedesktop.Secret.Service.SearchItems", 0, attrs).Store(&unlocked, &locked)
 	if err != nil {
-		slog.Error("SearchItems failed:", err)
+		slog.Error("SearchItems failed", slog.Any("error", err))
 		return fallback()
 	}
 
@@ -81,7 +81,7 @@ func gnomeKey(conn *dbus.Conn) []byte {
 	err = service.Call("org.freedesktop.Secret.Service.GetSecrets", 0, items, sessionPath).
 		Store(&secrets)
 	if err != nil {
-		slog.Error("[gnomeKey] : GetSecrets failed = ", err, "fallback()..")
+		slog.Error("[gnomeKey] : GetSecrets failed , fallback ...", slog.Any("error", err))
 		return fallback()
 	}
 
@@ -110,7 +110,7 @@ func kwalletKey(conn *dbus.Conn) []byte {
 		err := kwallet.Call("org.kde.KWallet.open", 0, "kdewallet", int64(0), "go-app").
 			Store(&handle)
 		if err != nil {
-			slog.Error("open failed for %s: %v", service, err)
+			slog.Error("[kwalletKey] : open failed for service", slog.Any("error", err))
 			continue
 		}
 		// DEBUGGING log
@@ -121,7 +121,7 @@ func kwalletKey(conn *dbus.Conn) []byte {
 		err = kwallet.Call("org.kde.KWallet.readEntry", 0, handle, "Chromium Keys", "Chromium Safe Storage", "go-app").Store(&secret)
 
 		if err != nil || len(secret) == 0 {
-			slog.Error("readEntry failed: %v", err)
+			slog.Error("[kwalletKey] : readEntry failed", slog.Any("error", err))
 			continue
 		}
 

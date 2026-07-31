@@ -52,7 +52,7 @@ func (f *Flags) Parser() error {
 			}
 			conc_n, err := strconv.Atoi(args[i+1])
 			if err != nil {
-				slog.Error("[CLI::Parser]: Concurrent  is not the integer", err)
+				slog.Error("[CLI::Parser]: Concurrent  is not the integer", slog.Any("error", err))
 				return fmt.Errorf("Conccurrent not integer")
 			}
 			if conc_n < 0 && conc_n > 9 {
@@ -70,7 +70,7 @@ func (f *Flags) Parser() error {
 				return fmt.Errorf("No output Path")
 			}
 			filePath := args[i+1]
-			if filePath == "" || filePath == "/" || filePath == "" {
+			if filePath == "" || filePath == "/" {
 				slog.Error("[CLI::Parser]: Invalid or Prohibited FilePath")
 				Usage()
 				return fmt.Errorf("Prohibited FilePath")
@@ -80,9 +80,8 @@ func (f *Flags) Parser() error {
 
 		case "help":
 			if i+1 <= args_length-1 {
-				// fmt.Println(args[i+1])
 				if i+1+1 <= len(args)-1 {
-					// fmt.Println(i+1+1, args_length-1)
+					//REQUIRED TO BE PRINT-ED
 					fmt.Printf("No help for '%v' \n", args[i+1]+args[i+1+1])
 					return fmt.Errorf("Usage Helper function  called!!")
 				}
@@ -104,7 +103,7 @@ func (f *Flags) Parser() error {
 			return fmt.Errorf("Usage helper function called !!")
 
 		default:
-			slog.Error("[CLI::Parser]: Unknown Flags!! ", args[i])
+			slog.Info(fmt.Sprintf("[CLI::Parser]: Unknown Flags!! %v", args[i]))
 			fmt.Printf("%v : unkown command \nRun 'tandem help' for usage.", args[i])
 			return fmt.Errorf("Unknown Command")
 			//Usage()
