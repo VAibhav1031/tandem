@@ -149,6 +149,7 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	if err != nil {
 
 		slog.Error("[CLI::CLI-UTILITY]: Network Failure ", "error: ", err)
+		fmt.Println("Connection Failure..")
 		return "", "", ""
 	}
 	defer resp.Body.Close()
@@ -221,6 +222,9 @@ func (f *Flags) CheckResume() ResultFlow {
 	var fullPath string
 	if f.Filepath == "" {
 		_, _, fullPath = f.dynamicResolution()
+		if fullPath == "" {
+			return ResultFlow{} // Connection-failure
+		}
 		f.Filepath = fullPath
 
 	}

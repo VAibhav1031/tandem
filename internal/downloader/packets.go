@@ -12,7 +12,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	// "sync/atomic"
 	"syscall"
 	"time"
 )
@@ -116,7 +115,7 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("[Downloader] Network error", slog.Any("error", err))
-		fmt.Println("Network Failure!!..")
+		fmt.Println("Connection-Failure..")
 		return
 	}
 
@@ -178,9 +177,6 @@ const globalTryLimit int = 4
 
 func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
-	var start int64
-	var limit int64
-
 	var fd int
 	var file *os.File
 
@@ -218,11 +214,18 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 		go func(Part_ID int) {
 			defer wg.Done()
 
+			var start int64
+			var limit int64
+
 			if ct.isReady {
+				d.cn.mw.Lock()
 				r_det := ct.resumeStf.LastRanges[Part_ID]
+				d.cn.mw.Unlock()
 				start, limit = r_det.CurrentOffsets, r_det.ExpectedLimit
 			} else {
+				d.cn.mw.Lock()
 				det := ct.stf.LastRanges[Part_ID]
+				d.cn.mw.Unlock()
 				start, limit = det.CurrentOffsets, det.ExpectedLimit
 			}
 			slog.Info(fmt.Sprintf("GOROUTINE : %v, -->Start: %v, limit-->  %v", i, start, limit))
@@ -235,20 +238,26 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 				case <-ct.ctx.Done():
 
-					// atomic.StoreInt64(&ct.stf.LastRanges[Part_ID].CurrentOffsets, currentOffset)
 					d.cn.mw.Lock()
-					ct.stf.LastRanges[Part_ID].CurrentOffsets = currentOffset
+					if currentOffset > ct.stf.LastRanges[Part_ID].CurrentOffsets {
+						ct.stf.LastRanges[Part_ID].CurrentOffsets = currentOffset
+					}
 					d.cn.mw.Unlock()
-					fmt.Println(Part_ID, currentOffset, expectedLimit)
-					slog.Info("[Concurrent]: Cancel.., Sucessfully Paused with current Offset States!!")
+
+					// fmt.Println(Part_ID, currentOffset, expectedLimit)
+					slog.Info("[Concurrent]: Canceled.., Sucessfully Paused with current Offset States!!")
 					return
 
 				default:
+
 					max_to_read := len(d.cn.bufferBlock)
-					limit_to_read := int64(max_to_read) // your 32KB size
+					limit_to_read := int64(max_to_read)
 					remainingBytes := expectedLimit - currentOffset
 
-					if remainingBytes < limit_to_read {
+					if remainingBytes <= 0 {
+						return
+					}
+					if remainingBytes < limit_to_read { // to make sure we read only the required number of byte of the current range
 						limit_to_read = remainingBytes
 					}
 
@@ -257,13 +266,14 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 						d.cn.passed = false
 						d.cn.mw.Unlock()
 						slog.Warn("[Concurrent-ERROR]:All Limit Crossed!! Exitting Goroutine..")
-						fmt.Println(Part_ID, currentOffset, expectedLimit) //DEBUGGING...
 						return
 					}
 
 					req, err := http.NewRequestWithContext(ct.ctx, "GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
 					if err != nil {
-						slog.Error("[Concurrent-ERROR] ", slog.Any("error", err))
+						slog.Error("[Concurrent-ERROR]: Request Creation failed ", slog.Any("error", err))
+						current_try_limit++
+						continue
 					}
 
 					req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", currentOffset, expectedLimit-1))
@@ -307,11 +317,6 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 							slog.Error("[Concurrent-Error]:[Network-Interrupted]: Saved  Progress")
 							// could be too harsh if i add the 'current' incrementor here
 							current_try_limit++
-							fmt.Println("Network interruption [ goroutine , currentOffset ]:", Part_ID, currentOffset)
-							break
-						}
-						if currentOffset >= expectedLimit {
-							currentOffset = expectedLimit
 							break
 						}
 
@@ -339,8 +344,8 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 		}(i)
 
-		slog.Info("[Concurrent]:All goroutine are fired!!")
 	}
+	slog.Info("[Concurrent]:All goroutine are fired!!")
 
 	wg.Wait()
 

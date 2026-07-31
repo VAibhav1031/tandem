@@ -85,7 +85,7 @@ func Execute() {
 		if err != nil {
 			slog.Error("[CLI::EXECUTE]:Unable to open the file")
 		}
-
+		fmt.Println(flowState.Stf.LastRanges)
 		json_format, err := json.Marshal(flowState.Stf)
 		if err != nil {
 			slog.Error("[CLI::EXECUTE]:JSON Marshalling Failed!!")

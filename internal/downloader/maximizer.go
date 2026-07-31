@@ -26,6 +26,7 @@ func (r *Responseheaders) ConcurrentCheck() bool {
 // {url:<link>,currentOffset:..,expectedLimit:..,filename:for_which_file}
 
 type Ranges struct {
+	Start          int64 `json:"start"`
 	CurrentOffsets int64 `json:"currentOffset"`
 	ExpectedLimit  int64 `json:"expectedLimit"`
 }
@@ -71,6 +72,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("[Downloader-Maximizer]: Network Failure!!", "error: ", err)
+		fmt.Println("Connection-Failure..")
 		return
 	}
 
@@ -99,13 +101,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 		if f_stf.Resume_stf.Url == "" {
 			for i := 1; i < int(d.Rs.Con_n); i++ {
-				// start = int64(i) * batchSize
-				// limit = start + batchSize
-				//
-				// // Ensure the last worker handles any remaining remainder bytes
-				// if i == int(d.Rs.Con_n)-1 {
-				// 	limit = int64(totalSize)
-				// }
+
 				start = limit
 				limit = start + batchSize
 
@@ -113,12 +109,12 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 					limit = limit - (limit % int64(totalSize))
 				}
 				f_stf.Stf.LastRanges[i] = Ranges{
+					Start:          start,
 					CurrentOffsets: start,
 					ExpectedLimit:  limit,
 				}
 			}
 
-			fmt.Println(f_stf.Stf.LastRanges)
 			conFlow.client = *client
 			conFlow.stf = f_stf.Stf
 			conFlow.headers = req_head
@@ -127,19 +123,19 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 		} else {
 
 			for i := 0; i < int(d.Rs.Con_n); i++ {
-				// start = limit
-				// limit = start + batchSize
-				//
-				// if limit%int64(totalSize) != limit {
-				// 	limit = limit - (limit % int64(totalSize))
-				// }
+
+				// we should have same LastRange as of the Resume so that if any network error or goroutine doesnt schedule and
+				// ctr+c happen rather than getting 0 (when we didnt use currentOffset of Resume STF.LastRanges )  we would be fallback
+				// to the previously written byte state and may continue on antoher resume
 				f_stf.Stf.LastRanges[i] = Ranges{
-					ExpectedLimit: f_stf.Resume_stf.LastRanges[i].ExpectedLimit,
+					Start:          f_stf.Resume_stf.LastRanges[i].Start,
+					CurrentOffsets: f_stf.Resume_stf.LastRanges[i].CurrentOffsets,
+					ExpectedLimit:  f_stf.Resume_stf.LastRanges[i].ExpectedLimit,
 				}
 			}
-			fmt.Println(f_stf.Stf.LastRanges)
+			fmt.Printf("Normal STF LastRanges given: %v", f_stf.Stf.LastRanges)
+			fmt.Printf("Resume STF LastRanges given: %v", f_stf.Resume_stf.LastRanges)
 			conFlow.client = *client
-			// give both for the usecase normal one and other
 			conFlow.resumeStf = f_stf.Resume_stf
 			conFlow.stf = f_stf.Stf
 			conFlow.ctx = ctx
@@ -155,5 +151,4 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 		d.DownloadNormal(req_head, client)
 	}
 
-	// resumption headers  we need something important for the  concurrent to continuye ,  i think for the resumption thing it has to check for that and then use  that global struct values and all shit for the work
 }
