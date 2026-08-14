@@ -50,6 +50,8 @@ func Execute() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	upd_chan := make(chan downloader.ResultUpdate, 1000000)
+	go update(ctx, upd_chan, concurrencyLimit)
 	flowState := &downloader.StateFile{}
 
 	if check.Result == "resume" {
@@ -60,6 +62,7 @@ func Execute() {
 			Url:        f.Url_link,
 			Filepath:   f.Filepath,
 			LastRanges: make([]downloader.Ranges, concurrencyLimit)}
+		flowState.UpdateResult = upd_chan
 		dow.Resolve(ctx, flowState)
 
 	} else if check.Result == "fresh" {
@@ -69,6 +72,7 @@ func Execute() {
 			Url:        f.Url_link,
 			Filepath:   f.Filepath,
 			LastRanges: make([]downloader.Ranges, concurrencyLimit)}
+		flowState.UpdateResult = upd_chan
 
 		dow.Resolve(ctx, flowState)
 	} else {
@@ -79,13 +83,13 @@ func Execute() {
 
 	if ctx.Err() == context.Canceled {
 		// To save the Last state
-
+		fmt.Println()
 		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		defer statefile.Close()
 		if err != nil {
 			slog.Error("[CLI::EXECUTE]:Unable to open the file")
 		}
-		fmt.Println(flowState.Stf.LastRanges)
+
 		json_format, err := json.Marshal(flowState.Stf)
 		if err != nil {
 			slog.Error("[CLI::EXECUTE]:JSON Marshalling Failed!!")

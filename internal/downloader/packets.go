@@ -241,10 +241,10 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 					d.cn.mw.Lock()
 					if currentOffset > ct.stf.LastRanges[Part_ID].CurrentOffsets {
 						ct.stf.LastRanges[Part_ID].CurrentOffsets = currentOffset
+
 					}
 					d.cn.mw.Unlock()
 
-					// fmt.Println(Part_ID, currentOffset, expectedLimit)
 					slog.Info("[Concurrent]: Canceled.., Sucessfully Paused with current Offset States!!")
 					return
 
@@ -295,6 +295,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 
 					// going for the block read , cause io.ReadFull() all or nothing , here we have to go in progressive way where if any error ocurr we can  store the till the read offset byte , not losing whole and retrying again
 
+					var currentBuff int64
 					for {
 						nr, readErr := resp.Body.Read(d.cn.bufferBlock[:limit_to_read])
 						if nr > 0 {
@@ -308,6 +309,13 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 							}
 
 							currentOffset += int64(nr)
+
+							// CurrentBuff For sending the data to the update groutine
+							currentBuff += int64(nr)
+							if currentBuff >= (512 * 1024) { // send only when 512 kb HAS  been read
+								ct.upd_chann <- ResultUpdate{Part_Id: Part_ID, Total_Size: ct.total_size, CurrOffset: currentOffset, Start: start}
+								currentBuff = 0
+							}
 						}
 
 						if readErr != nil {
@@ -321,7 +329,15 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 						}
 
 					}
-
+					// few byte maybe left less than (512kb<=) to send that also so wee see all the result nicely , which would be helpful across all the goroutines and giving nice result
+					if currentBuff > 0 {
+						ct.upd_chann <- ResultUpdate{
+							Part_Id:    Part_ID,
+							Total_Size: ct.total_size,
+							CurrOffset: currentOffset,
+							Start:      start,
+						}
+					}
 					resp.Body.Close()
 
 					// if currentOffset >= expectedLimit {

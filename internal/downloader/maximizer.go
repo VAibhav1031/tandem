@@ -39,17 +39,27 @@ type State_File_Format struct {
 
 // hgere it will come
 type concurrentFlow struct {
-	ctx       context.Context
-	client    http.Client
-	headers   *Responseheaders
-	resumeStf *State_File_Format
-	stf       *State_File_Format
-	isReady   bool
+	upd_chann  chan ResultUpdate
+	ctx        context.Context
+	client     http.Client
+	headers    *Responseheaders
+	total_size int64
+	resumeStf  *State_File_Format
+	stf        *State_File_Format
+	isReady    bool
+}
+
+type ResultUpdate struct {
+	Part_Id    int
+	Total_Size int64
+	CurrOffset int64
+	Start      int64
 }
 
 type StateFile struct {
-	Resume_stf *State_File_Format
-	Stf        *State_File_Format
+	Resume_stf   *State_File_Format
+	Stf          *State_File_Format
+	UpdateResult chan ResultUpdate
 }
 
 // Current Requirement for this to work nicely and do the task eassily for us
@@ -119,6 +129,9 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 			conFlow.stf = f_stf.Stf
 			conFlow.headers = req_head
 			conFlow.ctx = ctx
+			conFlow.total_size = int64(totalSize)
+			conFlow.upd_chann = f_stf.UpdateResult
+
 			slog.Info("[Downloader-Maximizer]: We are gonaa Fresh  Download (Concurrent), OLD n-concurrent will be used")
 		} else {
 
@@ -133,12 +146,12 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 					ExpectedLimit:  f_stf.Resume_stf.LastRanges[i].ExpectedLimit,
 				}
 			}
-			fmt.Printf("Normal STF LastRanges given: %v", f_stf.Stf.LastRanges)
-			fmt.Printf("Resume STF LastRanges given: %v", f_stf.Resume_stf.LastRanges)
 			conFlow.client = *client
 			conFlow.resumeStf = f_stf.Resume_stf
 			conFlow.stf = f_stf.Stf
 			conFlow.ctx = ctx
+			conFlow.total_size = int64(totalSize)
+			conFlow.upd_chann = f_stf.UpdateResult
 			conFlow.isReady = true
 
 			slog.Info("[Downloader-Maximizer]: We  are gonna Resume Download (Concurrent), OLD n-concurrent will be used")
