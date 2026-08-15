@@ -50,8 +50,6 @@ func Execute() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	upd_chan := make(chan downloader.ResultUpdate, 1000000)
-	go update(ctx, upd_chan, concurrencyLimit)
 	flowState := &downloader.StateFile{}
 
 	if check.Result == "resume" {
@@ -62,7 +60,6 @@ func Execute() {
 			Url:        f.Url_link,
 			Filepath:   f.Filepath,
 			LastRanges: make([]downloader.Ranges, concurrencyLimit)}
-		flowState.UpdateResult = upd_chan
 		dow.Resolve(ctx, flowState)
 
 	} else if check.Result == "fresh" {
@@ -72,7 +69,6 @@ func Execute() {
 			Url:        f.Url_link,
 			Filepath:   f.Filepath,
 			LastRanges: make([]downloader.Ranges, concurrencyLimit)}
-		flowState.UpdateResult = upd_chan
 
 		dow.Resolve(ctx, flowState)
 	} else {

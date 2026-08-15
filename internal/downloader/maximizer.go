@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -62,6 +63,30 @@ type StateFile struct {
 	UpdateResult chan ResultUpdate
 }
 
+func update(ctx context.Context, results chan ResultUpdate, stf []Ranges) {
+	con := len(stf)
+	latestOffset := make([]int64, con)
+	starts := make([]int64, con)
+	for i, r := range stf {
+		latestOffset[i] = r.CurrentOffsets
+		starts[i] = r.Start
+	}
+	for msg := range results {
+		// fmt.Println("DEBUG: Got update from Part", msg.Part_Id, "at offset", msg.CurrOffset)
+
+		latestOffset[msg.Part_Id] = msg.CurrOffset
+		var current_total int64
+		for i := 0; i < con; i++ {
+			current_total += latestOffset[i] - starts[i]
+		}
+		percentage := (float64(current_total) / float64(msg.Total_Size)) * 100
+
+		fmt.Printf("\r\033[KCurrent Percentage : %.2f%%", percentage)
+		os.Stdout.Sync()
+	}
+	// fmt.Println()
+}
+
 // Current Requirement for this to work nicely and do the task eassily for us
 // Managing the incoming request and based on that  pass the request based on the availability of concurrent approach and all shit
 func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
@@ -93,6 +118,8 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 		slog.Error("[Downloader-Maximizer-ERROR]:", slog.Any("status-code", resp.StatusCode), slog.Any("status", resp.Status), slog.Any("url", resp.Request.URL.String()))
 		return
 	}
+
+	upd_chan := make(chan ResultUpdate, 1000000)
 	req_head := ServerResponse(resp.Header)
 	// we need to pass the  variable  somewhere to there so that it happen here easily without  unecessary problem in
 	if req_head.ConcurrentCheck() {
@@ -124,13 +151,14 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 					ExpectedLimit:  limit,
 				}
 			}
+			go update(ctx, upd_chan, f_stf.Stf.LastRanges)
 
 			conFlow.client = *client
 			conFlow.stf = f_stf.Stf
 			conFlow.headers = req_head
 			conFlow.ctx = ctx
 			conFlow.total_size = int64(totalSize)
-			conFlow.upd_chann = f_stf.UpdateResult
+			conFlow.upd_chann = upd_chan
 
 			slog.Info("[Downloader-Maximizer]: We are gonaa Fresh  Download (Concurrent), OLD n-concurrent will be used")
 		} else {
@@ -146,12 +174,14 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 					ExpectedLimit:  f_stf.Resume_stf.LastRanges[i].ExpectedLimit,
 				}
 			}
+
+			go update(ctx, upd_chan, f_stf.Resume_stf.LastRanges)
 			conFlow.client = *client
 			conFlow.resumeStf = f_stf.Resume_stf
 			conFlow.stf = f_stf.Stf
 			conFlow.ctx = ctx
 			conFlow.total_size = int64(totalSize)
-			conFlow.upd_chann = f_stf.UpdateResult
+			conFlow.upd_chann = upd_chan
 			conFlow.isReady = true
 
 			slog.Info("[Downloader-Maximizer]: We  are gonna Resume Download (Concurrent), OLD n-concurrent will be used")

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -303,32 +302,6 @@ func (f *Flags) CheckResume() ResultFlow {
 
 	result_flow.Result = Nothing
 	return result_flow
-}
-
-func update(ctx context.Context, results chan downloader.ResultUpdate, con int) {
-	latestOffset := make([]int64, con)
-	starts := make([]int64, con)
-	seen := make([]bool, con)
-	for msg := range results {
-		// fmt.Println("DEBUG: Got update from Part", msg.Part_Id, "at offset", msg.CurrOffset)
-		if !seen[msg.Part_Id] {
-			starts[msg.Part_Id] = msg.Start
-			seen[msg.Part_Id] = true
-		}
-		latestOffset[msg.Part_Id] = msg.CurrOffset
-
-		var current_total int64
-		for i := 0; i < con; i++ {
-			if seen[i] { // why this cause we would include  only those value which are present and contributinng , means which are downloading and sedn the data to update goroutine no to  who are in-process or in the transit to send
-				current_total += latestOffset[i] - starts[i]
-			}
-		}
-		percentage := (float64(current_total) / float64(msg.Total_Size)) * 100
-
-		fmt.Printf("\r\033[KCurrent Percentage : %.2f%%", percentage)
-		os.Stdout.Sync()
-	}
-	// fmt.Println()
 }
 
 func Usage() {
