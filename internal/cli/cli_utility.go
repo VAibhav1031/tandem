@@ -325,11 +325,10 @@ func update(ctx context.Context, results chan downloader.ResultUpdate, con int) 
 		}
 		percentage := (float64(current_total) / float64(msg.Total_Size)) * 100
 
-		fmt.Printf("\r\033[Kcurrent Percentage : %.2f%%", percentage)
-		// time.Sleep(200 * timeMillisecond)
+		fmt.Printf("\r\033[KCurrent Percentage : %.2f%%", percentage)
 		os.Stdout.Sync()
 	}
-	fmt.Println()
+	// fmt.Println()
 }
 
 func Usage() {

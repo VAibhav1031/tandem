@@ -1,7 +1,6 @@
 package downloader
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -203,6 +202,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 			return
 		}
 	}
+	defer close(ct.upd_chann)
 
 	// pre passed thing
 	d.cn.passed = true
@@ -364,21 +364,27 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	slog.Info("[Concurrent]:All goroutine are fired!!")
 
 	wg.Wait()
-
 	if !d.cn.passed {
 		slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
 		fmt.Println("Download Failed!!")
 		return
 	} else {
 		// remove the state file if there
-		if ct.ctx.Err() != context.Canceled { // then only the  file has either gone fully downloaded or not canceled
-			err := os.Remove(d.Rs.StateFileLocation)
-			if err != nil {
-				slog.Error("[Concurrent-Error]: StateFile Deletion Failed on download completion")
-				return
+
+		if ct.ctx.Err() == nil { // then only the  file has either gone fully downloaded or not canceled
+			_, err := os.Stat(d.Rs.StateFileLocation)
+			if err == nil {
+				err := os.Remove(d.Rs.StateFileLocation)
+				if err != nil {
+					slog.Error("[Concurrent-Error]: StateFile Deletion Failed on download completion")
+					return
+				}
 			}
-			fmt.Println("SUCESSFULLY DONE :)")
+			time.Sleep(1 * time.Second)
+			fmt.Println("\nSUCESSFULLY DONE :)")
+			return
 		}
+
 	}
 
 }
