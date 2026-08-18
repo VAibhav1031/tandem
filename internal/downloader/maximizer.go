@@ -72,8 +72,8 @@ type StateFile struct {
 	UpdateResult chan ResultUpdate
 }
 
-func update(ctx context.Context, results chan ResultUpdate, stf []Ranges) {
-	con := len(stf)
+func update(ctx context.Context, results chan ResultUpdate, stf []Ranges, con int) {
+
 	latestOffset := make([]int64, con)
 	starts := make([]int64, con)
 	for i, r := range stf {
@@ -162,7 +162,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 					ExpectedLimit:  limit,
 				}
 			}
-			go update(ctx, upd_chan, f_stf.Stf.LastRanges)
+			go update(ctx, upd_chan, f_stf.Stf.LastRanges, int(d.Rs.Con_n))
 
 			conFlow.client = *client
 			conFlow.stf = f_stf.Stf
@@ -186,7 +186,7 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 				}
 			}
 
-			go update(ctx, upd_chan, f_stf.Resume_stf.LastRanges)
+			go update(ctx, upd_chan, f_stf.Resume_stf.LastRanges, int(d.Rs.Con_n))
 			conFlow.client = *client
 			conFlow.resumeStf = f_stf.Resume_stf
 			conFlow.stf = f_stf.Stf
@@ -201,6 +201,8 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 	} else {
 
 		slog.Info("[Downloader-Maximizer]: We are gonna Fresh Download everytime (No concurrent)")
+
+		go update(ctx, upd_chan, f_stf.Resume_stf.LastRanges, int(d.Rs.Con_n))
 		var norm normalFlow
 		norm.ctx = ctx
 		norm.upd_chann = upd_chan

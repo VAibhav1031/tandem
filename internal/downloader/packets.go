@@ -65,6 +65,7 @@ func (d *DownloadInfo) DownloadNormal(nf normalFlow) {
 		return
 	}
 
+	// for closing of the channel from the sender side
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -87,6 +88,8 @@ func (d *DownloadInfo) DownloadNormal(nf normalFlow) {
 	//
 	// 	out.Write(preview)
 	// }
+
+	defer close(nf.upd_chann)
 	var passed bool = true
 	for {
 		select {
@@ -105,25 +108,28 @@ func (d *DownloadInfo) DownloadNormal(nf normalFlow) {
 
 					// Update the counter
 					currentOffset += int64(n)
-
 					currBuff += int64(n)
+
 					if currBuff >= (512 * 1024) {
 						nf.upd_chann <- ResultUpdate{Part_Id: 0, Total_Size: nf.total_size, CurrOffset: currentOffset, Start: 1}
 					}
 
 				}
 
-				if err == io.EOF {
-					break // Data finished!
-				} else {
-					passed = false
-					break
+				if err != nil {
+					if err == io.EOF {
+						break // Data finished!
+					} else {
+						passed = false
+						fmt.Println(err)
+						break
+					}
 				}
 			}
 			resp.Body.Close()
 		}
 		if !passed {
-			slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
+			slog.Error("[Download-Normal-Error]: Download Normal Failed !!", slog.Any("error", "Network Interruption"))
 			fmt.Println("")
 			return
 		} else {
