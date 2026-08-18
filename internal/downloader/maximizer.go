@@ -38,8 +38,8 @@ type State_File_Format struct {
 	Filepath   string   `json:"filepath"`
 }
 
-// hgere it will come
-type concurrentFlow struct {
+// All Param  required by the concurrent downloader method
+type conCurrentFlow struct {
 	upd_chann  chan ResultUpdate
 	ctx        context.Context
 	client     http.Client
@@ -48,6 +48,15 @@ type concurrentFlow struct {
 	resumeStf  *State_File_Format
 	stf        *State_File_Format
 	isReady    bool
+}
+
+// All Param. required by the normal downloader method
+type normalFlow struct {
+	upd_chann  chan ResultUpdate
+	ctx        context.Context
+	client     http.Client
+	headers    *Responseheaders
+	total_size int64
 }
 
 type ResultUpdate struct {
@@ -121,16 +130,18 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 
 	upd_chan := make(chan ResultUpdate, 1000000)
 	req_head := ServerResponse(resp.Header)
+
+	// get the total size of the file
+	totalSize, _ := strconv.Atoi(req_head.Content_length)
+	slog.Info(fmt.Sprintf("totalSize of the file %v and in the gb %v", totalSize, (float64(totalSize) / float64(1024*1024*1024))))
+
 	// we need to pass the  variable  somewhere to there so that it happen here easily without  unecessary problem in
-	if req_head.ConcurrentCheck() {
+	if req_head.ConcurrentCheck() && d.Rs.Con_n > 1 {
 		// req_head is good for getting the concurrent_check
 		// we need to check the stf is populated or not , if it is tghen  we ould go  and tghen there is one more thing
 		// if stf.
 
-		var conFlow concurrentFlow
-		totalSize, _ := strconv.Atoi(req_head.Content_length)
-		slog.Info(fmt.Sprintf("totalSize of the file %v and in the gb %v", totalSize, (float64(totalSize) / float64(1024*1024*1024))))
-
+		var conFlow conCurrentFlow
 		batchSize := int64(math.Ceil(float64(totalSize) / float64(d.Rs.Con_n)))
 		slog.Info("floated value ", ":", math.Ceil(float64(totalSize)/float64(d.Rs.Con_n)))
 		start, limit := int64(0), batchSize
@@ -190,8 +201,13 @@ func (d *DownloadInfo) Resolve(ctx context.Context, f_stf *StateFile) {
 	} else {
 
 		slog.Info("[Downloader-Maximizer]: We are gonna Fresh Download everytime (No concurrent)")
-
-		d.DownloadNormal(req_head, client)
+		var norm normalFlow
+		norm.ctx = ctx
+		norm.upd_chann = upd_chan
+		norm.headers = req_head
+		norm.client = *client
+		norm.total_size = int64(totalSize)
+		d.DownloadNormal(norm)
 	}
 
 }

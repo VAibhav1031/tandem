@@ -6,10 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -35,17 +32,6 @@ type Responseheaders struct {
 	Accept_ranges      string
 }
 
-var mimeToExt = map[string]string{
-	"text/plain":                "txt",
-	"text/html":                 "html",
-	"text/csv":                  "csv",
-	"application/pdf":           "pdf",
-	"image/jpeg":                "jpg",
-	"image/png":                 "png",
-	"application/zip":           "zip",
-	"application/octect-stream": "bin",
-}
-
 // we should strore the map only of the header nothing else
 func NewServerLink(link string, n int8, location string, state string) *RequestServer {
 	return &RequestServer{
@@ -66,52 +52,13 @@ func DownloadWorker(request *RequestServer) *DownloadInfo {
 	return &DownloadInfo{Rs: request}
 }
 
-func getExtensionFromUrl(rawUrl string) string {
-
-	u, err := url.Parse(rawUrl)
-
-	if err != nil {
-		return ""
-	}
-
-	ext := path.Ext(u.Path)
-	return ext
-}
-
-func (r *Responseheaders) getFileInfo(url string) (string, string) {
-
-	if r.Content_deposition != "" {
-		file_name := strings.Split(r.Content_deposition, "filename=")[1]
-		file_type := strings.Split(file_name, ".")[1]
-
-		fmt.Println("THIS IS IT")
-		return file_name, file_type
-
-	}
-
-	if r.Content_type != "" {
-		file_type := mimeToExt[r.Content_type]
-
-		return "", file_type
-	}
-
-	return "", getExtensionFromUrl(url)
-
-	//
-	//1 Deposition
-	//2 Content Type
-	//3 URL -Check
-	//4 sniffing (initial packets)
-	//5 fallback (default type .txt .bin or just default with no extensiongiven)
-}
-
-func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Client) {
+func (d *DownloadInfo) DownloadNormal(nf normalFlow) {
 
 	req, err := http.NewRequest("GET", d.Rs.Link, nil)
 	if err != nil {
 		slog.Error("[Downloader] Error Ocurred <http Client GET req>", slog.Any("error", err))
 	}
-	resp, err := client.Do(req)
+	resp, err := nf.client.Do(req)
 	if err != nil {
 		slog.Error("[Downloader] Network error", slog.Any("error", err))
 		fmt.Println("Connection-Failure..")
@@ -132,41 +79,66 @@ func (d *DownloadInfo) DownloadNormal(req_head *Responseheaders, client *http.Cl
 		return
 	}
 
-	buffer_read := make([]byte, buffer_length) //buffer_lenght --> 32kb length
-	// contentLength := resp.ContentLength        // This is an int64
-	var downloaded int64 = 0
+	buffer_read := make([]byte, buffer_length)
+	var currBuff int64 = 0
+	var currentOffset int64 = 0
 
 	// if preview != nil {
 	//
 	// 	out.Write(preview)
 	// }
+	var passed bool = true
 	for {
-		// read from network into buffer_read (network Stream buffer
-		n, err := resp.Body.Read(buffer_read)
+		select {
+		case <-nf.ctx.Done():
+			fmt.Println("Normal Download cannot have the Pause Feature..")
+			slog.Info("[Downloader-Normal]: Cancelled , Normal Download , no Pause state management")
+			return
+		default:
+			for {
+				// read from network into buffer_read (network Stream buffer
+				n, err := resp.Body.Read(buffer_read)
 
-		if n > 0 {
-			// Writing the chunk to the disk (chunk by chunk)
-			out.Write(buffer_read[:n])
+				if n > 0 {
+					// Writing the chunk to the disk (chunk by chunk)
+					out.Write(buffer_read[:n])
 
-			// Update the counter
-			downloaded += int64(n)
+					// Update the counter
+					currentOffset += int64(n)
 
-			// if contentLength > 0 {
-			// 	percent := (float64(downloaded) / float64(contentLength)) * 100
-			// 	// fmt.Printf("\rProgress: %.2f%% \n", percent)
-			// }
+					currBuff += int64(n)
+					if currBuff >= (512 * 1024) {
+						nf.upd_chann <- ResultUpdate{Part_Id: 0, Total_Size: nf.total_size, CurrOffset: currentOffset, Start: 1}
+					}
+
+				}
+
+				if err == io.EOF {
+					break // Data finished!
+				} else {
+					passed = false
+					break
+				}
+			}
+			resp.Body.Close()
 		}
+		if !passed {
+			slog.Error("[Concurrent-Error]: Concurrent Process Failed !!")
+			fmt.Println("")
+			return
+		} else {
 
-		if err == io.EOF {
-			break // Data finished!
+			slog.Info("[Downloader-Normal]: Downloaded Sucessfully")
+			fmt.Println("\nSucesfully Done!!")
+			return
 		}
 	}
+
 }
 
 /* ***Concurrent Download Section***  */
 
 type conCurrentDet struct {
-	// n           int
 	bufferBlock [32 * 1024]byte
 	passed      bool
 	mw          sync.Mutex
@@ -174,7 +146,7 @@ type conCurrentDet struct {
 
 const globalTryLimit int = 4
 
-func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
+func (d *DownloadInfo) ConcurrentDownloader(ct conCurrentFlow) {
 
 	var fd int
 	var file *os.File
@@ -204,7 +176,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct concurrentFlow) {
 	}
 	defer close(ct.upd_chann)
 
-	// pre passed thing
+	// ALl goroutine Checker bool,helps in  checking that all passed or not
 	d.cn.passed = true
 
 	wg := &sync.WaitGroup{}

@@ -39,11 +39,13 @@ func Execute() {
 	dow := downloader.DownloadWorker(req)
 
 	concurrencyLimit := f.Concurrent_n
-	if concurrencyLimit <= 0 {
-		slog.Info("[CLI::EXECUTE]: No concurrency count provided. Falling back to default.", "workers", DefaultConcurrency)
+	if concurrencyLimit <= 1 {
+		concurrencyLimit = 1
+	} else if concurrencyLimit < 2 || concurrencyLimit > 8 {
+		slog.Info("[CLI::EXECUTE]: Invalid concurrency count provided. Falling back to default..", "workers", DefaultConcurrency)
 		concurrencyLimit = DefaultConcurrency
-
 	}
+
 	// Adding thge concurrentcy Limit
 	dow.Rs.Con_n = int8(concurrencyLimit)
 
@@ -77,8 +79,9 @@ func Execute() {
 		return
 	}
 
-	if ctx.Err() == context.Canceled {
+	if ctx.Err() == context.Canceled && len(flowState.Stf.LastRanges) != 0 {
 		// To save the Last state
+
 		fmt.Println()
 		statefile, err := os.OpenFile(check.HashStateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		defer statefile.Close()
