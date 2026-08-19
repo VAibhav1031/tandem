@@ -227,8 +227,8 @@ func (d *DownloadInfo) ConcurrentDownloader(ct conCurrentFlow) {
 					return
 
 				default:
-
-					max_to_read := len(d.cn.bufferBlock)
+					localBuffer := make([]byte, len(d.cn.bufferBlock))
+					max_to_read := len(localBuffer)
 					limit_to_read := int64(max_to_read)
 					remainingBytes := expectedLimit - currentOffset
 
@@ -269,15 +269,26 @@ func (d *DownloadInfo) ConcurrentDownloader(ct conCurrentFlow) {
 						continue
 					}
 
+					// Example in Go logic
+					if resp.StatusCode != 206 {
+						// Treat this as an error! Do not write to disk.
+						// The server is denying chunking for this request.
+
+						slog.Error("[Concurrent-Error] Partial Content", slog.Any("status-code", resp.StatusCode), slog.Any("url", resp.Request.URL.String()))
+						resp.Body.Close()
+						current_try_limit++
+						continue
+					}
+
 					// Since each slice of the buffere is not overlapping , so  there is no need to put the lock over the buffer and we cango easily and it is the design which help it move
 
 					// going for the block read , cause io.ReadFull() all or nothing , here we have to go in progressive way where if any error ocurr we can  store the till the read offset byte , not losing whole and retrying again
 
 					var currentBuff int64
 					for {
-						nr, readErr := resp.Body.Read(d.cn.bufferBlock[:limit_to_read])
+						nr, readErr := resp.Body.Read(localBuffer[:limit_to_read])
 						if nr > 0 {
-							_, err := file.WriteAt(d.cn.bufferBlock[:nr], currentOffset)
+							_, err := file.WriteAt(localBuffer[:nr], currentOffset)
 
 							if err != nil {
 								d.cn.passed = false

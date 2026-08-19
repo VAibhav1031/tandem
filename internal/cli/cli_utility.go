@@ -100,11 +100,20 @@ func getExtensionFromUrl(rawUrl string) string {
 }
 func (r *headersDetails) getFileInfo(url string) (string, string) {
 
+	getExten := getExtensionFromUrl(url)
+	var filename string
+	if getExten != "" {
+		filename_split := strings.Split(url, "/")
+		filename_mutated := filename_split[len(filename_split)-1]
+		filename = filename_mutated[:len(filename_mutated)-len(getExten)]
+		// fmt.Println(filename_mutated, filename, getExten)
+	}
+
 	if r.headers.Content_deposition != "" {
 		file_name := strings.Split(r.headers.Content_deposition, "filename=")[1]
 		file_type := strings.Split(file_name, ".")[1]
 
-		return file_name, file_type
+		return file_name, "." + file_type
 
 	}
 
@@ -113,11 +122,14 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 		file_type := mimeToExt[r.headers.Content_type]
 
 		// fmt.Println(r.headers.Content_type)
-		return "", file_type
+		if filename != "" {
+			return filename, getExten
+		}
+		return filename, file_type
 	}
 
 	slog.Info("[CLI::CLI-UTILITY]:Filename, file_type choosen correctly")
-	return "", getExtensionFromUrl(url)
+	return filename, getExten
 
 	//
 	//1 Deposition
@@ -183,7 +195,7 @@ func (f *Flags) dynamicResolution() (string, string, string) {
 	} else if filename == "" && filetype != "" {
 		filename_with_type = "/download_file" + "." + filetype
 	} else if filename != "" && filetype != "" {
-		filename_with_type = "/" + filename + "." + filetype
+		filename_with_type = "/" + filename + filetype
 	} else {
 		filename_with_type = "/download_file.bin"
 	}
