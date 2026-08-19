@@ -286,6 +286,7 @@ func (d *DownloadInfo) ConcurrentDownloader(ct conCurrentFlow) {
 
 					var currentBuff int64
 					for {
+
 						nr, readErr := resp.Body.Read(localBuffer[:limit_to_read])
 						if nr > 0 {
 							_, err := file.WriteAt(localBuffer[:nr], currentOffset)
