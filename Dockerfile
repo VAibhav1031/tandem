@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o tandem ./cmd/tandem-cli/main.go
 
 
 
-FROM debian:slim
+FROM debian:stable-slim
 
 WORKDIR /root/
 
