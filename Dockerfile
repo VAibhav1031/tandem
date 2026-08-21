@@ -17,7 +17,7 @@ FROM debian:stable-slim
 WORKDIR /root/
 
 # RUN apk add bash
-
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt   /etc/ssl/certs/
 COPY --from=builder /app/tandem . 
 # CMD ["./tandem"]
 
