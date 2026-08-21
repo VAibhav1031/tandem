@@ -98,6 +98,15 @@ func getExtensionFromUrl(rawUrl string) string {
 
 	return ext
 }
+
+// For filename and filetype
+// Steps
+//1 Deposition
+//2 Content Type
+//3 URL -Check
+//4 sniffing (initial packets)
+//5 fallback (default type .txt .bin or just default with no extensiongiven)
+
 func (r *headersDetails) getFileInfo(url string) (string, string) {
 
 	getExten := getExtensionFromUrl(url)
@@ -131,12 +140,6 @@ func (r *headersDetails) getFileInfo(url string) (string, string) {
 	slog.Info("[CLI::CLI-UTILITY]:Filename, file_type choosen correctly")
 	return filename, getExten
 
-	//
-	//1 Deposition
-	//2 Content Type
-	//3 URL -Check
-	//4 sniffing (initial packets)
-	//5 fallback (default type .txt .bin or just default with no extensiongiven)
 }
 
 // if the output is not provided then we go with this
@@ -223,7 +226,7 @@ func filePathResolution(filePath string, filename string, increment_value int) s
 	type_splitted := strings.Split(splited_value[len(splited_value)-1], ".")
 	type_extract := type_splitted[len(type_splitted)-1]
 	to_be_joined_folder := splited_value[:len(splited_value)-1]
-	fullPath := strings.Join(to_be_joined_folder, "/") + fmt.Sprintf("/"+filename+"(%d)."+type_extract, increment_value)
+	fullPath := strings.Join(to_be_joined_folder, "/") + fmt.Sprintf("/"+"(%d)"+filename+"."+type_extract, increment_value)
 
 	return fullPath
 }
@@ -241,7 +244,7 @@ func (f *Flags) CheckResume() ResultFlow {
 			f.Filepath = fullPath
 		}
 		if filename == "" {
-			filename = "/download_file"
+			filename = "download_file"
 		}
 
 	}
@@ -281,7 +284,6 @@ func (f *Flags) CheckResume() ResultFlow {
 
 			} else {
 				//Resume safely
-				fmt.Println(fullPath)
 				result_flow.Result = CanResume
 				result_flow.Fullpath = fullPath
 				result_flow.HashStateFile = hash_file_path

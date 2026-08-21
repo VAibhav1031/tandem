@@ -31,7 +31,7 @@ func RunSetup() {
 		return
 	}
 
-	cmd := exec.Command("sh", temp_file.Name())
+	cmd := exec.Command("bash", temp_file.Name())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

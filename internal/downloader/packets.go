@@ -145,7 +145,7 @@ func (d *DownloadInfo) DownloadNormal(nf normalFlow) {
 /* ***Concurrent Download Section***  */
 
 type conCurrentDet struct {
-	bufferBlock [32 * 1024]byte
+	bufferBlock [256 * 1024]byte
 	passed      bool
 	mw          sync.Mutex
 }
@@ -247,7 +247,9 @@ func (d *DownloadInfo) ConcurrentDownloader(ct conCurrentFlow) {
 						return
 					}
 
-					req, err := http.NewRequestWithContext(ct.ctx, "GET", d.Rs.Link, nil) // new request , default http Transport with TLS , https support based on that
+					// new request , default http Transport with TLS , https support based on that
+
+					req, err := http.NewRequestWithContext(ct.ctx, "GET", d.Rs.Link, nil)
 					if err != nil {
 						slog.Error("[Concurrent-ERROR]: Request Creation failed ", slog.Any("error", err))
 						current_try_limit++

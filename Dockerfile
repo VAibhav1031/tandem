@@ -12,11 +12,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o tandem ./cmd/tandem-cli/main.go
 
 
 
-FROM alpine:latest
+FROM debian:slim
 
 WORKDIR /root/
 
-RUN apk add bash
+# RUN apk add bash
 
 COPY --from=builder /app/tandem . 
 # CMD ["./tandem"]
